@@ -681,12 +681,9 @@ async function loadGmReview() {
 async function loadHrAll() {
   var result = await sb.from('leave_requests').select('*').order('start_date',{ascending:false});
   allHrLeaves = result.data || [];
-  var unitMap = {};
-  allHrLeaves.forEach(function(r) { if (r.unit_name && r.unit_id) unitMap[r.unit_id] = r.unit_name; });
-  var unitOrderMap2 = {"7":1,"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17};
-  var unitList = Object.keys(unitMap).sort(function(a,b){ return (unitOrderMap2[a]||999)-(unitOrderMap2[b]||999); });
+  var FIXED_UNITS = [["7","管理部"], ["16","營業部"], ["25","水碓分社"], ["34","竹圍分社"], ["43","英專分社"], ["52","義山分社"], ["61","三芝分社"], ["70","八里分社"], ["89","成州分社"], ["98","五股分社"], ["104","萬金分社"], ["113","新莊分社"], ["122","泰山分社"], ["131","林口分社"], ["140","板橋分社"], ["159","蘆洲分社"], ["168","三重分社"]];
   var unitSel = document.getElementById('hr-filter-unit');
-  unitSel.innerHTML = '<option value="">所有單位</option>' + unitList.map(function(id){ return '<option value="' + unitMap[id] + '">' + unitMap[id] + '</option>'; }).join('');
+  unitSel.innerHTML = '<option value="">所有單位</option>' + FIXED_UNITS.map(function(u){ return '<option value="'+u[1]+'">'+u[1]+'</option>'; }).join('');
   document.getElementById('hr-filter-emp').innerHTML = '<option value="">所有人員</option>';
   filterHrLeaves();
 }
@@ -1162,17 +1159,7 @@ async function loadHrMgmt() {
   var res = await sb.from('employees').select('*').order('unit_id').order('emp_no').limit(500);
   allMgmtEmps = res.data || [];
   if (res.error) { console.error('loadHrMgmt error:', res.error); }
-  allUnits = [];
-  var seen = {};
-  allMgmtEmps.forEach(function(e) {
-    if (!seen[e.unit_id]) { seen[e.unit_id] = true; allUnits.push({id:e.unit_id, name:e.unit_name}); }
-  });
-  allUnits.sort(function(a,b){
-    var orderA = {'7': 1, '16': 2, '25': 3, '34': 4, '43': 5, '52': 6, '61': 7, '70': 8, '89': 9, '98': 10, '104': 11, '113': 12, '122': 13, '131': 14, '140': 15, '159': 16, '168': 17};
-    var oa = orderA[a.id] || 999;
-    var ob = orderA[b.id] || 999;
-    return oa - ob;
-  });
+  allUnits = [{id:"7",name:"管理部"}, {id:"16",name:"營業部"}, {id:"25",name:"水碓分社"}, {id:"34",name:"竹圍分社"}, {id:"43",name:"英專分社"}, {id:"52",name:"義山分社"}, {id:"61",name:"三芝分社"}, {id:"70",name:"八里分社"}, {id:"89",name:"成州分社"}, {id:"98",name:"五股分社"}, {id:"104",name:"萬金分社"}, {id:"113",name:"新莊分社"}, {id:"122",name:"泰山分社"}, {id:"131",name:"林口分社"}, {id:"140",name:"板橋分社"}, {id:"159",name:"蘆洲分社"}, {id:"168",name:"三重分社"}];
   var unitOpts = '<option value="">所有單位</option>' + allUnits.map(function(u){ return '<option value="'+u.id+'">'+u.name+'</option>'; }).join('');
   document.getElementById('mgmt-filter-unit').innerHTML = unitOpts;
   document.getElementById('new-emp-unit').innerHTML = allUnits.map(function(u){ return '<option value="'+u.id+'|'+u.name+'">'+u.name+'</option>'; }).join('');
