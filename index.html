@@ -1159,8 +1159,9 @@ function toggleAdminMode() {
 }
 
 async function loadHrMgmt() {
-  var res = await sb.from('employees').select('*');
+  var res = await sb.from('employees').select('*').order('unit_id').order('emp_no').limit(500);
   allMgmtEmps = res.data || [];
+  if (res.error) { console.error('loadHrMgmt error:', res.error); }
   allUnits = [];
   var seen = {};
   allMgmtEmps.forEach(function(e) {
