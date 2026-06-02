@@ -998,7 +998,17 @@ async function importLeaves(input) {
       return;
     }
 
-    var result = await sb.from('leave_requests').upsert(records, {
+    // 去除 Excel 內部重複（同一人+起始日+假別）
+    var seen = {};
+    var deduped = [];
+    records.forEach(function(r) {
+      var key = r.emp_no + '|' + r.start_date + '|' + r.leave_type + '|' + r.leave_subtype;
+      if (!seen[key]) { seen[key] = true; deduped.push(r); }
+    });
+    var skippedDup = records.length - deduped.length;
+    if (skippedDup > 0) console.log('去除Excel內部重複:', skippedDup, '筆');
+
+    var result = await sb.from('leave_requests').upsert(deduped, {
       onConflict: 'emp_no,start_date,leave_type,leave_subtype',
       ignoreDuplicates: false
     });
@@ -1026,7 +1036,7 @@ async function importLeaves(input) {
       }
     }
     msgEl.style.color = 'var(--success)';
-    msgEl.textContent = '✅ 成功匯入/更新 ' + records.length + ' 筆，跳過 ' + skipped + ' 筆';
+    msgEl.textContent = '✅ 成功匯入/更新 ' + deduped.length + ' 筆，跳過 ' + skipped + ' 筆（Excel內重複 ' + skippedDup + ' 筆）';
     input.value = '';
     loadHrAll();
   } catch(e) {
