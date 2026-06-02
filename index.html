@@ -779,10 +779,22 @@ let proxyLeaves = [];
 
 async function loadCalendar() {
   if (currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager) {
-    var unitRes = await sb.from('leave_requests').select('*')
-      .eq('unit_id', currentUser.unit_id)
-      .in('status', ['pending', 'approved']);
-    allUnitLeaves = unitRes.data || [];
+    // 分頁抓全部單位假單
+    var allData = [];
+    var from = 0;
+    var pageSize = 1000;
+    while (true) {
+      var res = await sb.from('leave_requests').select('*')
+        .eq('unit_id', currentUser.unit_id)
+        .in('status', ['pending', 'approved'])
+        .range(from, from + pageSize - 1);
+      if (res.data && res.data.length > 0) {
+        allData = allData.concat(res.data);
+        if (res.data.length < pageSize) break;
+        from += pageSize;
+      } else { break; }
+    }
+    allUnitLeaves = allData;
   } else {
     var myRes = await sb.from('leave_requests').select('*')
       .eq('emp_no', currentUser.emp_no).eq('status','approved');
@@ -793,6 +805,7 @@ async function loadCalendar() {
   proxyLeaves = proxyRes.data || [];
   renderCalendar();
 }
+
 
 
 
@@ -1298,9 +1311,13 @@ async function changeUnit(sel) {
   var empNo = sel.dataset.empno;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
   var parts = sel.value.split('|');
-  if (!confirm('確定將 '+emp.name+' 的單位改為「'+parts[1]+'」？主管旗標將會清除。')) { loadHrMgmt(); return; }
-  await sb.from('employees').update({unit_id:parts[0], unit_name:parts[1], is_manager:false}).eq('emp_no', empNo);
-  alert('✅ 單位已更新，如需設為主管請再點「設為主管」');
+  var newUnitId = parts[0], newUnitName = parts[1];
+  if (!confirm('確定將 '+emp.name+' 的單位改為「'+newUnitName+'」？\n主管旗標將會清除，歷史假單也會一併搬移。')) { loadHrMgmt(); return; }
+  // 更新員工資料
+  await sb.from('employees').update({unit_id:newUnitId, unit_name:newUnitName, is_manager:false}).eq('emp_no', empNo);
+  // 歷史假單一併搬移
+  await sb.from('leave_requests').update({unit_id:newUnitId, unit_name:newUnitName}).eq('emp_no', empNo);
+  alert('✅ 單位已更新，歷史假單也已搬移至'+newUnitName+'');
   loadHrMgmt();
 }
 
