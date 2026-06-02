@@ -778,14 +778,22 @@ let calTab = 'unit';
 let proxyLeaves = [];
 
 async function loadCalendar() {
-  var myRes = await sb.from('leave_requests').select('*')
-    .eq('emp_no', currentUser.emp_no).eq('status','approved');
-  allUnitLeaves = myRes.data || [];
+  if (currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager) {
+    var unitRes = await sb.from('leave_requests').select('*')
+      .eq('unit_id', currentUser.unit_id)
+      .in('status', ['pending', 'approved']);
+    allUnitLeaves = unitRes.data || [];
+  } else {
+    var myRes = await sb.from('leave_requests').select('*')
+      .eq('emp_no', currentUser.emp_no).eq('status','approved');
+    allUnitLeaves = myRes.data || [];
+  }
   var proxyRes = await sb.from('leave_requests').select('*')
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   renderCalendar();
 }
+
 
 
 
