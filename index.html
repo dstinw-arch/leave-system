@@ -107,6 +107,8 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .cal-day.today { background:#e4f0e8; }
 .cal-day.today .cal-day-num { color:var(--primary); font-weight:700; }
 .cal-day.has-leave { background:#fff3cd; cursor:pointer; }
+.cal-day.has-pending { background:#fce8e8; cursor:pointer; }
+.cal-day.has-leave.has-pending { background:linear-gradient(135deg,#fff3cd 50%,#fce8e8 50%); cursor:pointer; }
 .cal-day.is-proxy { background:#dce8ff; cursor:pointer; }
 .cal-day.has-leave.is-proxy { background: linear-gradient(135deg, #fff3cd 50%, #dce8ff 50%); cursor:pointer; }
 .cal-dot { width:5px; height:5px; border-radius:50%; background:var(--warning); margin:1px auto 0; }
@@ -291,11 +293,12 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div class="cal-grid" id="cal-grid"></div>
       </div>
-      <div style="display:flex;gap:1rem;margin-bottom:.5rem;font-size:11px;color:var(--muted);">
+      <div style="display:flex;gap:1rem;margin-bottom:.5rem;font-size:11px;color:var(--muted);flex-wrap:wrap;">
         <span><span style="display:inline-block;width:10px;height:10px;background:#c0392b;border-radius:50%;margin-right:4px;"></span>休假</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#e67e22;border-radius:50%;margin-right:4px;"></span>病假</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#4a7fcb;border-radius:50%;margin-right:4px;"></span>其他</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#888;border-radius:50%;margin-right:4px;"></span>代理</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border:1.5px solid #c0392b;border-radius:50%;margin-right:4px;"></span>待審核</span>
       </div>
       <div id="cal-detail"><div class="empty-hint">點選有標記的日期查看詳情</div></div>
     </div>
@@ -509,7 +512,7 @@ function buildNav() {
     <button class="bnav active" id="bnav-emp-home" onclick="showPage('emp-home',this)"><span class="bnav-icon">🏠</span>我的假期</button>
     <button class="bnav" id="bnav-emp-apply" onclick="showPage('emp-apply',this)"><span class="bnav-icon">📝</span>申請假單</button>
     <button class="bnav" id="bnav-mgr-calendar" onclick="showPage('mgr-calendar',this);loadCalendar()"><span class="bnav-icon">📅</span>行事曆</button>`;
-  if (u.is_manager) {
+  if (u.is_manager || u.is_sub_manager) {
     btns += `
     <button class="bnav" id="bnav-mgr-review" onclick="showPage('mgr-review',this);loadMgrReview()"><span class="bnav-icon">✅</span>審核</button>`;
   }
@@ -544,7 +547,7 @@ function showPage(id, btn) {
 // 主管和理事主席 → 總經理審核
 // 其他員工 → 所屬單位主管審核
 function getReviewerType(emp) {
-  if (emp.is_manager || emp.emp_no === CHAIRMAN_EMP_NO) return 'gm';
+  if (emp.is_manager || emp.is_sub_manager || emp.emp_no === CHAIRMAN_EMP_NO) return 'gm';
   return 'unit';
 }
 
@@ -803,14 +806,21 @@ function renderCalendar() {
     var myLeaves = allUnitLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
     var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
     var isToday = today.getFullYear()===calYear&&today.getMonth()===calMonth&&today.getDate()===d;
-    var hasSomething = myLeaves.length>0||myProxies.length>0;
+    var hasApproved = myLeaves.some(function(r){ return r.status==='approved'; });
+    var hasPending = myLeaves.some(function(r){ return r.status==='pending'; });
+    var hasProxy = myProxies.length>0;
+    var dayCls = isToday?'today':'';
+    if (hasApproved && hasPending) dayCls += ' has-leave has-pending';
+    else if (hasApproved) dayCls += ' has-leave';
+    else if (hasPending) dayCls += ' has-pending';
     var dots = '';
-    if (myLeaves.length>0) {
-      var dotColor = getLeaveColor(myLeaves[0].leave_type);
-      dots += '<div class="cal-dot" style="background:'+dotColor+'"></div>';
-    }
-    if (myProxies.length>0) dots += '<div class="cal-dot" style="background:#888"></div>';
-    html2+='<div class="cal-day '+(isToday?'today':'')+' '+(hasSomething?'has-leave':'')+'" data-ds="'+ds+'" onclick="showCalDay(this.dataset.ds)">' +
+    myLeaves.forEach(function(r){
+      var dotColor = r.status==='pending' ? '#e74c3c' : getLeaveColor(r.leave_type);
+      var dotStyle = r.status==='pending' ? 'border:1.5px solid '+getLeaveColor(r.leave_type)+';background:transparent;' : 'background:'+dotColor+';';
+      dots += '<div class="cal-dot" style="'+dotStyle+'display:inline-block;"></div>';
+    });
+    if (hasProxy) dots += '<div class="cal-dot" style="background:#888"></div>';
+    html2+='<div class="cal-day '+dayCls+'" data-ds="'+ds+'" onclick="showCalDay(this.dataset.ds)">' +
       '<div class="cal-day-num">'+d+'</div>'+dots+'</div>';
   }
   grid.innerHTML=html2;
@@ -825,11 +835,16 @@ function showCalDay(ds) {
   var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
   if (!myLeaves.length && !myProxies.length) { detail.innerHTML='<div class="empty-hint">'+ds+' 無紀錄</div>'; return; }
   if (myLeaves.length) {
-    out += '<div style="font-size:13px;font-weight:600;color:var(--primary-dark);margin-bottom:.5rem">'+ds+' 我的請假</div>';
+    var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager;
+    var leaveTitle = isMgrView ? ds+' 單位請假（'+myLeaves.length+'人）' : ds+' 我的請假';
+    out += '<div style="font-size:13px;font-weight:600;color:var(--primary-dark);margin-bottom:.5rem">'+leaveTitle+'</div>';
     out += myLeaves.map(function(r) {
       var color = getLeaveColor(r.leave_type);
-      return '<div class="leave-item approved" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
-        '<div class="leave-header"><div class="leave-name">'+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge badge-approved">已核准</span></div>' +
+      var statusMap = {pending:'待審核',approved:'已核准',rejected:'已拒絕'};
+      var badgeMap = {pending:'badge-pending',approved:'badge-approved',rejected:'badge-rejected'};
+      var namePrefix = isMgrView ? r.emp_name+' · ' : '';
+      return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
+        '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
         '<div class="leave-meta">'+r.days+'天<br>代理人：'+(r.proxy_name||'—')+'</div></div>';
     }).join('');
   }
@@ -1206,6 +1221,7 @@ function empMgmtItemHtml(e) {
     ? '<span style="font-size:10px;background:#d1f0e0;color:#0f5132;padding:2px 7px;border-radius:20px;">正常</span>'
     : '<span style="font-size:10px;background:#f8d7da;color:#842029;padding:2px 7px;border-radius:20px;">停用</span>';
   var mgmtBadge = e.is_manager ? '<span style="font-size:10px;background:#fff3cd;color:#856404;padding:2px 7px;border-radius:20px;margin-left:3px;">主管</span>' : '';
+  var subMgrBadge = e.is_sub_manager ? '<span style="font-size:10px;background:#fde8d8;color:#9c4a00;padding:2px 7px;border-radius:20px;margin-left:3px;">副主管</span>' : '';
   var hrBadge = e.is_hr ? '<span style="font-size:10px;background:#e8f4f0;color:#1a5276;padding:2px 7px;border-radius:20px;margin-left:3px;">人事</span>' : '';
   var gmBadge = e.is_gm ? '<span style="font-size:10px;background:#f3e5ff;color:#6b21a8;padding:2px 7px;border-radius:20px;margin-left:3px;">總經理</span>' : '';
 
@@ -1226,7 +1242,7 @@ function empMgmtItemHtml(e) {
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">' +
       '<div><span style="font-size:14px;font-weight:600;">'+e.name+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;">'+e.emp_no+'</span><br>' +
       '<span style="font-size:11px;color:var(--muted);">'+e.unit_name+' · '+(e.title||'')+'</span></div>' +
-      '<div>'+statusBadge+mgmtBadge+hrBadge+gmBadge+'</div>' +
+      '<div>'+statusBadge+mgmtBadge+subMgrBadge+hrBadge+gmBadge+'</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr auto;gap:.5rem;margin-bottom:.4rem;align-items:center;">' +
       '<select data-empno="'+e.emp_no+'" onchange="changeUnit(this)" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fafafa;-webkit-appearance:none;">'+unitOpts+'</select>' +
@@ -1234,6 +1250,7 @@ function empMgmtItemHtml(e) {
     '</div>' +
     '<div style="display:flex;gap:.4rem;flex-wrap:wrap;">' +
       roleBtn('is_manager', '主管', '#fff3cd', '#856404', 'var(--muted)') +
+      roleBtn('is_sub_manager', '副主管', '#fde8d8', '#9c4a00', 'var(--muted)') +
       roleBtn('is_hr', '人事', '#e8f4f0', '#1a5276', 'var(--muted)') +
       roleBtn('is_gm', '總經理', '#f3e5ff', '#6b21a8', 'var(--muted)') +
       '<button data-empno="'+e.emp_no+'" onclick="resetPw(this)" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fafafa;color:var(--muted);cursor:pointer;font-size:11px;font-family:inherit;">重設密碼</button>' +
@@ -1285,7 +1302,7 @@ async function toggleRole(btn) {
   var currentVal = btn.dataset.current === '1';
   var newVal = !currentVal;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
-  var roleNames = { is_manager:'主管', is_hr:'人事', is_gm:'總經理' };
+  var roleNames = { is_manager:'主管', is_sub_manager:'副主管', is_hr:'人事', is_gm:'總經理' };
   var roleName = roleNames[field] || field;
   var msg = newVal
     ? '確定將 '+emp.name+' 設為「'+roleName+'」？'
