@@ -284,6 +284,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <!-- 行事曆（主管單位 + 個人代理人） -->
     <div id="mgr-calendar" class="page">
       <div class="page-title">行事曆</div>
+      <div id="cal-debug" style="font-size:11px;color:var(--muted);margin-bottom:.5rem;"></div>
 
       <div class="calendar-wrap">
         <div class="cal-header">
@@ -348,6 +349,23 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <div id="hr-mgmt" class="page" style="display:none;flex-direction:column;height:calc(100vh - 56px);overflow:hidden;">
       <div style="flex-shrink:0;padding:1rem 0 0;">
         <div class="page-title" style="margin-bottom:.75rem;">人員管理</div>
+
+        <div style="background:#fff3cd;border-radius:10px;padding:.75rem 1rem;margin-bottom:.75rem;box-shadow:0 1px 4px rgba(0,0,0,.07);">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:13px;font-weight:600;color:#856404;">📅 年度特休更新</div>
+            <div onclick="toggleAnnualPanel()" id="annual-toggle" style="width:40px;height:22px;background:#ccc;border-radius:12px;position:relative;cursor:pointer;flex-shrink:0;">
+              <div id="annual-knob" style="width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+            </div>
+          </div>
+          <div id="annual-panel" style="display:none;margin-top:.75rem;">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:.6rem;">輸入計算基準日（通常為當年年底），系統會根據每人到職日自動計算新的特休天數</div>
+            <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+              <input type="date" id="annual-base-date" value="2027-12-31" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;" />
+              <button onclick="updateAnnualLeave()" style="padding:8px 16px;border:none;border-radius:7px;background:#e67e22;color:#fff;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;white-space:nowrap;">🔄 更新特休</button>
+            </div>
+            <div id="annual-update-msg" style="font-size:12px;display:none;"></div>
+          </div>
+        </div>
 
         <div style="background:#fff;border-radius:10px;padding:1rem;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:.75rem;">
           <div style="font-size:13px;font-weight:600;color:var(--primary-dark);margin-bottom:.75rem;">➕ 新增員工帳號</div>
@@ -547,7 +565,10 @@ function showPage(id, btn) {
 // 主管和理事主席 → 總經理審核
 // 其他員工 → 所屬單位主管審核
 function getReviewerType(emp) {
-  if (emp.is_manager || emp.is_sub_manager || emp.emp_no === CHAIRMAN_EMP_NO) return 'gm';
+  // 分社主管、副主管、理事主席 → 總經理審核
+  // 管理部主管 → 不走總經理（管理部沒有分社主管概念）
+  if (emp.emp_no === CHAIRMAN_EMP_NO) return 'gm';
+  if ((emp.is_manager || emp.is_sub_manager) && emp.unit_id !== '7') return 'gm';
   return 'unit';
 }
 
@@ -778,8 +799,39 @@ let calTab = 'unit';
 let proxyLeaves = [];
 
 async function loadCalendar() {
-  if (currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager) {
-    // 分頁抓全部單位假單
+  var isChairman = currentUser.emp_no === CHAIRMAN_EMP_NO;
+
+  if (isChairman) {
+    // 理事主席：看各分社主管+副主管+總經理的請假
+    var mgrsRes = await sb.from('employees').select('emp_no')
+      .eq('is_manager', true).neq('unit_id', '7');
+    var subMgrsRes = await sb.from('employees').select('emp_no')
+      .eq('is_sub_manager', true).neq('unit_id', '7');
+    var mgrNos = (mgrsRes.data||[]).concat(subMgrsRes.data||[]).map(function(e){ return e.emp_no; });
+    mgrNos.push(GM_EMP_NO);
+    var res = await sb.from('leave_requests').select('*')
+      .in('emp_no', mgrNos)
+      .in('status', ['pending', 'approved']);
+    allUnitLeaves = res.data || [];
+
+  } else if (currentUser.is_gm) {
+    // 總經理：看各分社主管+副主管（不含管理部）
+    var mgrsRes = await sb.from('employees').select('emp_no')
+      .eq('is_manager', true).neq('unit_id', '7');
+    var subMgrsRes = await sb.from('employees').select('emp_no')
+      .eq('is_sub_manager', true).neq('unit_id', '7');
+    var mgrNos = (mgrsRes.data||[]).concat(subMgrsRes.data||[]).map(function(e){ return e.emp_no; });
+    if (mgrNos.length > 0) {
+      var res = await sb.from('leave_requests').select('*')
+        .in('emp_no', mgrNos)
+        .in('status', ['pending', 'approved']);
+      allUnitLeaves = res.data || [];
+    } else {
+      allUnitLeaves = [];
+    }
+
+  } else if (currentUser.is_manager || currentUser.is_sub_manager) {
+    // 分社主管/副主管：看整個單位
     var allData = [];
     var from = 0;
     var pageSize = 1000;
@@ -795,16 +847,23 @@ async function loadCalendar() {
       } else { break; }
     }
     allUnitLeaves = allData;
+
   } else {
+    // 一般員工：只看自己
     var myRes = await sb.from('leave_requests').select('*')
       .eq('emp_no', currentUser.emp_no).eq('status','approved');
     allUnitLeaves = myRes.data || [];
   }
+
   var proxyRes = await sb.from('leave_requests').select('*')
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
+  var dbg = document.getElementById('cal-debug');
+  if (dbg) dbg.textContent = 'emp_no:'+currentUser.emp_no+' CHAIRMAN:'+CHAIRMAN_EMP_NO+' isChairman:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
+
+
 
 
 
@@ -1351,6 +1410,70 @@ async function resetPw(btn) {
   if (!confirm('確定要將 '+emp.name+' 的密碼重設為員工編號？')) return;
   localStorage.removeItem('pw_'+empNo);
   alert('✅ 密碼已重設，下次登入時需重新設定密碼');
+}
+
+
+// ── 年度特休更新 ──
+function toggleAnnualPanel() {
+  var panel = document.getElementById('annual-panel');
+  var toggle = document.getElementById('annual-toggle');
+  var knob = document.getElementById('annual-knob');
+  var isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  toggle.style.background = isOpen ? '#ccc' : '#e67e22';
+  knob.style.left = isOpen ? '2px' : '20px';
+}
+
+var LEAVE_TABLE = [
+  [0, 0], [0.5, 3], [1, 7], [2, 10], [3, 14], [4, 14],
+  [5, 15], [6, 15], [7, 15], [8, 15], [9, 15],
+  [10, 16], [11, 17], [12, 18], [13, 19], [14, 20],
+  [15, 21], [16, 22], [17, 23], [18, 24], [19, 25],
+  [20, 26], [21, 27], [22, 28], [23, 29], [24, 30], [25, 30]
+];
+
+function calcAnnualDays(hireDate, baseDate) {
+  var hire = new Date(hireDate);
+  var base = new Date(baseDate);
+  var years = (base - hire) / (365.25 * 24 * 3600 * 1000);
+  if (years < 0) return 0;
+  // 找對照表
+  var days = 0;
+  for (var i = LEAVE_TABLE.length - 1; i >= 0; i--) {
+    if (years >= LEAVE_TABLE[i][0]) {
+      days = LEAVE_TABLE[i][1];
+      break;
+    }
+  }
+  return days;
+}
+
+async function updateAnnualLeave() {
+  var baseDate = document.getElementById('annual-base-date').value;
+  var msgEl = document.getElementById('annual-update-msg');
+  if (!baseDate) { alert('請輸入基準日期'); return; }
+  if (!confirm('確定要以 '+baseDate+' 為基準日，更新所有員工的年度特休天數？')) return;
+
+  msgEl.style.display = 'block';
+  msgEl.style.color = 'var(--muted)';
+  msgEl.textContent = '計算中...';
+
+  // 抓所有有到職日的員工
+  var res = await sb.from('employees').select('emp_no, name, hire_date').not('hire_date', 'is', null);
+  var emps = res.data || [];
+  var updated = 0, skipped = 0;
+
+  for (var i = 0; i < emps.length; i++) {
+    var emp = emps[i];
+    if (!emp.hire_date) { skipped++; continue; }
+    var newDays = calcAnnualDays(emp.hire_date, baseDate);
+    await sb.from('employees').update({ annual_leave_days: newDays }).eq('emp_no', emp.emp_no);
+    updated++;
+  }
+
+  msgEl.style.color = 'var(--success)';
+  msgEl.textContent = '✅ 已更新 '+updated+' 人的特休天數，跳過 '+skipped+' 人（無到職日）';
+  loadHrMgmt();
 }
 
 updateSubtype();
