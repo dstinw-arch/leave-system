@@ -284,7 +284,6 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <!-- 行事曆（主管單位 + 個人代理人） -->
     <div id="mgr-calendar" class="page">
       <div class="page-title">行事曆</div>
-      <div id="cal-debug" style="font-size:11px;color:var(--muted);margin-bottom:.5rem;"></div>
 
       <div class="calendar-wrap">
         <div class="cal-header">
@@ -442,7 +441,7 @@ const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 理事主席員工編號
-const CHAIRMAN_EMP_NO = '871004';
+const CHAIRMAN_EMP_NO = '0871004';
 
 const LEAVE_TYPES = {
   '休假': ['特別休假','防疫隔離假','防疫照顧假','疫苗接種假'],
@@ -858,8 +857,6 @@ async function loadCalendar() {
   var proxyRes = await sb.from('leave_requests').select('*')
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
-  var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'emp_no:'+currentUser.emp_no+' CHAIRMAN:'+CHAIRMAN_EMP_NO+' isChairman:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
