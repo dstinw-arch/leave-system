@@ -236,7 +236,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <div class="form-row">
             <label>結束時間</label>
             <select id="apply-end-time">
-              <option value="12:50">12:50（中午）</option>
+              <option value="12:40">12:40（中午）</option>
               <option value="17:40">17:40（下班）</option>
             </select>
           </div>
@@ -1063,25 +1063,28 @@ function parseDate(val) {
 }
 
 function parseTime(val) {
-  if (!val) return '09:00';
+  if (!val) return '08:40';
   var s = String(val).trim();
-  // HH:MM 格式
   if (/^\d{1,2}:\d{2}/.test(s)) {
-    var h = parseInt(s.split(':')[0]);
-    if (h < 11) return '08:40';
-    if (h < 15) return '12:50';
+    var parts = s.split(':');
+    var h = parseInt(parts[0]);
+    var m = parseInt(parts[1]);
+    var total = h * 60 + m;
+    if (total <= 12*60+40) return total < 11*60 ? '08:40' : '12:40';
+    if (total <= 12*60+50) return '12:50';
     return '17:40';
   }
-  // 小數格式
   var n = parseFloat(s);
   if (!isNaN(n)) {
     var totalMin = Math.round(n * 1440);
     var hr = Math.floor(totalMin / 60);
-    if (hr < 11) return '08:40';
-    if (hr < 15) return '12:50';
+    var mn = totalMin % 60;
+    var tot = hr * 60 + mn;
+    if (tot <= 12*60+40) return tot < 11*60 ? '08:40' : '12:40';
+    if (tot <= 12*60+50) return '12:50';
     return '17:40';
   }
-  return '09:00';
+  return '08:40';
 }
 
 function parseCSVLine(line) {
