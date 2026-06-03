@@ -985,7 +985,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v45 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v46 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1019,6 +1019,7 @@ function renderCalendar() {
     if (hasApproved && hasPending) dayCls += ' has-leave has-pending';
     else if (hasApproved) dayCls += ' has-leave';
     else if (hasPending) dayCls += ' has-pending';
+    if (hasProxy) dayCls += ' is-proxy';
     var dots = '';
     myLeaves.forEach(function(r){
       var dotColor = r.status==='pending' ? '#e74c3c' : getLeaveColor(r.leave_type);
