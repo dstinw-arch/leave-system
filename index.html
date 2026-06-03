@@ -261,7 +261,19 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div id="apply-error" class="error-msg"></div>
         <br>
-        <button class="btn-submit" onclick="submitLeave()">送出申請</button>
+        <button class="btn-submit" onclick="confirmLeave()">送出申請</button>
+
+    <!-- 確認送出 Modal -->
+    <div id="confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+        <div style="font-size:16px;font-weight:700;margin-bottom:16px;">📋 確認假單內容</div>
+        <div id="confirm-content" style="font-size:14px;line-height:2;color:#333;"></div>
+        <div style="display:flex;gap:10px;margin-top:20px;">
+          <button onclick="document.getElementById('confirm-modal').style.display='none'" style="flex:1;padding:10px;border:1.5px solid #ccc;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:14px;">返回修改</button>
+          <button onclick="doSubmitLeave()" style="flex:1;padding:10px;border:none;border-radius:8px;background:#1a5e38;color:#fff;cursor:pointer;font-size:14px;font-weight:600;">確認送出</button>
+        </div>
+      </div>
+    </div>
       </div>
     </div>
 
@@ -490,7 +502,6 @@ async function doLogin() {
   document.getElementById('set-title').textContent = data.title;
   document.getElementById('page-login').style.display = 'none';
   document.getElementById('page-app').style.display = 'block';
-  if (!storedPw) { document.getElementById('page-changepw').classList.add('show'); return; }
   initApp();
 }
 
@@ -634,7 +645,37 @@ function updateSubtype() {
   sub.innerHTML = LEAVE_TYPES[type].map(s=>`<option value="${s}">${s}</option>`).join('');
 }
 
-async function submitLeave() {
+function confirmLeave() {
+  const errEl = document.getElementById('apply-error');
+  errEl.style.display = 'none';
+  const type = document.getElementById('apply-type').value;
+  const subtype = document.getElementById('apply-subtype').value;
+  const startDate = document.getElementById('apply-start-date').value;
+  const endDate = document.getElementById('apply-end-date').value;
+  const startTime = document.getElementById('apply-start-time').value;
+  const endTime = document.getElementById('apply-end-time').value;
+  const days = parseFloat(document.getElementById('apply-days').value);
+  const reason = document.getElementById('apply-reason').value.trim();
+  const proxyName = document.getElementById('apply-proxy-name').value.trim();
+  const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
+  if (!startDate||!endDate||isNaN(days)||days<=0||!reason||!proxyName||!proxyDuty) {
+    errEl.textContent='請填寫所有必要欄位（含代理人姓名與擔任事務）';
+    errEl.style.display='block'; return;
+  }
+  const timeLabel = days <= 0.5
+    ? startDate + ' ' + startTime + '～' + endTime
+    : startDate + ' ～ ' + endDate;
+  document.getElementById('confirm-content').innerHTML =
+    '<b>假別：</b>' + type + '　' + subtype + '<br>' +
+    '<b>時間：</b>' + timeLabel + '<br>' +
+    '<b>天數：</b>' + days + ' 天<br>' +
+    '<b>事由：</b>' + reason + '<br>' +
+    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）';
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+async function doSubmitLeave() {
+  document.getElementById('confirm-modal').style.display = 'none';
   const emp = currentUser;
   const type = document.getElementById('apply-type').value;
   const subtype = document.getElementById('apply-subtype').value;
@@ -647,11 +688,6 @@ async function submitLeave() {
   const proxyName = document.getElementById('apply-proxy-name').value.trim();
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
   const errEl = document.getElementById('apply-error');
-  errEl.style.display = 'none';
-  if (!startDate||!endDate||isNaN(days)||days<=0||!reason||!proxyName||!proxyDuty) {
-    errEl.textContent='請填寫所有必要欄位（含代理人姓名與擔任事務）';
-    errEl.style.display='block'; return;
-  }
   // 主管和理事主席的假單標記為 reviewer_type=gm，其他為 unit
   const reviewerType = getReviewerType(emp);
   const { error } = await sb.from('leave_requests').insert({
@@ -802,17 +838,23 @@ async function loadCalendar() {
   var isChairman = currentUser.emp_no === CHAIRMAN_EMP_NO;
 
   if (isChairman) {
-    // 理事主席：看各分社主管+副主管+總經理的請假
+    // 理事主席：看各分社主管+副主管+所有總經理/副總經理的請假
     var mgrsRes = await sb.from('employees').select('emp_no')
       .eq('is_manager', true).neq('unit_id', '7');
-    var subMgrsRes = await sb.from('employees').select('emp_no')
-      .eq('is_sub_manager', true).neq('unit_id', '7');
-    var mgrNos = (mgrsRes.data||[]).concat(subMgrsRes.data||[]).map(function(e){ return e.emp_no; });
-    mgrNos.push(GM_EMP_NO);
-    var res = await sb.from('leave_requests').select('*')
-      .in('emp_no', mgrNos)
-      .in('status', ['pending', 'approved']);
-    allUnitLeaves = res.data || [];
+    var gmRes = await sb.from('employees').select('emp_no')
+      .eq('is_gm', true);
+    var mgrNos = (mgrsRes.data||[])
+      .concat(gmRes.data||[])
+      .map(function(e){ return e.emp_no; });
+    mgrNos = mgrNos.filter(function(v,i,a){ return a.indexOf(v)===i; });
+    if (mgrNos.length > 0) {
+      var res = await sb.from('leave_requests').select('*')
+        .in('emp_no', mgrNos)
+        .in('status', ['pending', 'approved']);
+      allUnitLeaves = res.data || [];
+    } else {
+      allUnitLeaves = [];
+    }
 
   } else if (currentUser.is_gm) {
     // 總經理：看各分社主管+副主管（不含管理部）
@@ -915,7 +957,7 @@ function showCalDay(ds) {
   var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
   if (!myLeaves.length && !myProxies.length) { detail.innerHTML='<div class="empty-hint">'+ds+' 無紀錄</div>'; return; }
   if (myLeaves.length) {
-    var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager;
+    var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager || currentUser.emp_no === CHAIRMAN_EMP_NO;
     var leaveTitle = isMgrView ? ds+' 單位請假（'+myLeaves.length+'人）' : ds+' 我的請假';
     out += '<div style="font-size:13px;font-weight:600;color:var(--primary-dark);margin-bottom:.5rem">'+leaveTitle+'</div>';
     out += myLeaves.map(function(r) {
