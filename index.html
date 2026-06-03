@@ -985,7 +985,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v42 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v44 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1041,8 +1041,12 @@ function showCalDay(ds) {
   var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
   if (!myLeaves.length && !myProxies.length) { detail.innerHTML='<div class="empty-hint">'+ds+' 無紀錄</div>'; return; }
   if (myLeaves.length) {
-    var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager || currentUser.emp_no === CHAIRMAN_EMP_NO;
-    var leaveTitle = isMgrView ? ds+' 單位請假（'+myLeaves.length+'人）' : ds+' 我的請假';
+    // 管理部一般員工看到直屬長官假單時也要顯示名字
+    var isMgmtStaff = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !currentUser.is_manager && !currentUser.is_gm;
+    var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager || currentUser.emp_no === CHAIRMAN_EMP_NO || isMgmtStaff;
+    var leaveTitle = isMgmtStaff
+      ? ds+' 請假紀錄（'+myLeaves.length+'筆）'
+      : isMgrView ? ds+' 單位請假（'+myLeaves.length+'人）' : ds+' 我的請假';
     out += '<div style="font-size:13px;font-weight:600;color:var(--primary-dark);margin-bottom:.5rem">'+leaveTitle+'</div>';
     out += myLeaves.map(function(r) {
       var color = getLeaveColor(r.leave_type);
