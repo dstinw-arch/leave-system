@@ -112,7 +112,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .cal-day.is-proxy { background:#dce8ff; cursor:pointer; }
 .cal-day.has-leave.is-proxy { background: linear-gradient(135deg, #fff3cd 50%, #dce8ff 50%); cursor:pointer; }
 .cal-dot { width:5px; height:5px; border-radius:50%; background:var(--warning); margin:1px auto 0; }
-.cal-dot-proxy { width:5px; height:5px; border-radius:50%; background:#4a7fcb; margin:1px auto 0; }
+.cal-dot-proxy { width:5px; height:5px; border-radius:50%; background:#f39c12; margin:1px auto 0; }
 .cal-day.other-month { opacity:.3; }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; display:none; align-items:center; justify-content:center; padding:1rem; }
@@ -318,7 +318,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         <span><span style="display:inline-block;width:10px;height:10px;background:#c0392b;border-radius:50%;margin-right:4px;"></span>休假</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#e67e22;border-radius:50%;margin-right:4px;"></span>病假</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#4a7fcb;border-radius:50%;margin-right:4px;"></span>其他</span>
-        <span><span style="display:inline-block;width:10px;height:10px;background:#888;border-radius:50%;margin-right:4px;"></span>代理</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#f39c12;border-radius:50%;margin-right:4px;"></span>代理</span>
         <span><span style="display:inline-block;width:10px;height:10px;border:1.5px solid #c0392b;border-radius:50%;margin-right:4px;"></span>待審核</span>
       </div>
       <div id="cal-detail"><div class="empty-hint">點選有標記的日期查看詳情</div></div>
@@ -985,7 +985,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v44 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v45 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1025,7 +1025,7 @@ function renderCalendar() {
       var dotStyle = r.status==='pending' ? 'border:1.5px solid '+getLeaveColor(r.leave_type)+';background:transparent;' : 'background:'+dotColor+';';
       dots += '<div class="cal-dot" style="'+dotStyle+'display:inline-block;"></div>';
     });
-    if (hasProxy) dots += '<div class="cal-dot" style="background:#888"></div>';
+    if (hasProxy) dots += '<div class="cal-dot" style="background:#f39c12"></div>';
     html2+='<div class="cal-day '+dayCls+'" data-ds="'+ds+'" onclick="showCalDay(this.dataset.ds)">' +
       '<div class="cal-day-num">'+d+'</div>'+dots+'</div>';
   }
@@ -1063,7 +1063,7 @@ function showCalDay(ds) {
     out += myProxies.map(function(r) {
       var color = getLeaveColor(r.leave_type);
       return '<div class="leave-item approved" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
-        '<div class="leave-header"><div class="leave-name">'+r.emp_name+' 請假</div><span class="leave-badge" style="background:#e8e8e8;color:#555">代理中</span></div>' +
+        '<div class="leave-header"><div class="leave-name">'+r.emp_name+' 請假</div><span class="leave-badge" style="background:#f39c12;color:#fff">代理中</span></div>' +
         '<div class="leave-meta">'+r.leave_type+' — '+r.leave_subtype+'（'+r.days+'天）<br>擔任事務：'+(r.proxy_duty||'—')+'</div></div>';
     }).join('');
   }
