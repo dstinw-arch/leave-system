@@ -904,7 +904,7 @@ async function loadCalendar() {
   if (isChairman) {
     // 理事主席：各分社主管 + 總經理/副總
     var mgrsRes = await sb.from('employees').select('emp_no')
-      .eq('is_manager', true).not('unit_id', 'in', "('7','7-1','7-2','7-3','7-4','7-5','7-6','7-7','7-8','7-9','7-10','7-11','7-12','7-13')");
+      .eq('is_manager', true).not('unit_id', 'in', "('7','7-01','7-02','7-03','7-04','7-05','7-06','7-07','7-08','7-09','7-10','7-11','7-12')");
     var gmRes = await sb.from('employees').select('emp_no').eq('is_gm', true);
     calEmpNos = (mgrsRes.data||[]).concat(gmRes.data||[]).map(function(e){ return e.emp_no; });
 
@@ -913,7 +913,7 @@ async function loadCalendar() {
     var subsRes = await sb.from('employees').select('emp_no')
       .eq('supervisor_emp_no', currentUser.emp_no);
     var gmRes2 = await sb.from('employees').select('emp_no').eq('is_gm', true)
-      .not('unit_id', 'in', "('7','7-1','7-2','7-3','7-4','7-5','7-6','7-7','7-8','7-9','7-10','7-11','7-12','7-13')");  // 排除管理部
+      .not('unit_id', 'in', "('7','7-01','7-02','7-03','7-04','7-05','7-06','7-07','7-08','7-09','7-10','7-11','7-12')");  // 排除管理部
     // 直接抓 supervisor = 理事主席的那位（總經理蔡景偉）
     var bosRes = await sb.from('employees').select('emp_no')
       .eq('emp_no', currentUser.supervisor_emp_no);
@@ -922,7 +922,7 @@ async function loadCalendar() {
   } else if (currentUser.is_gm) {
     // 總經理：各分社主管/副主管 + 所有 is_gm 人員（副總/總）
     var mgrsRes = await sb.from('employees').select('emp_no')
-      .eq('is_manager', true).not('unit_id', 'in', "('7','7-1','7-2','7-3','7-4','7-5','7-6','7-7','7-8','7-9','7-10','7-11','7-12','7-13')");
+      .eq('is_manager', true).not('unit_id', 'in', "('7','7-01','7-02','7-03','7-04','7-05','7-06','7-07','7-08','7-09','7-10','7-11','7-12')");
     var gmRes = await sb.from('employees').select('emp_no')
       .eq('is_gm', true);
     calEmpNos = (mgrsRes.data||[]).concat(gmRes.data||[])
