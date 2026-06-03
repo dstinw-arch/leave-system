@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>淡水信用合作社 請假系統</title>
+<title>淡水信用合作社 請假系統 v42</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -284,6 +284,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <!-- 行事曆（主管單位 + 個人代理人） -->
     <div id="mgr-calendar" class="page">
       <div class="page-title">行事曆</div>
+      <div id="cal-debug" style="font-size:11px;color:red;margin-bottom:.5rem;"></div>
 
       <div class="calendar-wrap">
         <div class="cal-header">
@@ -857,6 +858,8 @@ async function loadCalendar() {
   var proxyRes = await sb.from('leave_requests').select('*')
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
+  var dbg = document.getElementById('cal-debug');
+  if (dbg) dbg.textContent = 'v42 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
