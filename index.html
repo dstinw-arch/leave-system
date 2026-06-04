@@ -1021,7 +1021,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v52 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v53 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1090,9 +1090,17 @@ function showCalDay(ds) {
       var statusMap = {pending:'待審核',approved:'已核准',rejected:'已拒絕'};
       var badgeMap = {pending:'badge-pending',approved:'badge-approved',rejected:'badge-rejected'};
       var namePrefix = isMgrView ? r.emp_name+' · ' : '';
+      var canReview = isMgrView && !isMgmtStaff && r.status==='pending';
+      var reviewBtns = canReview
+        ? '<div style="margin-top:.5rem;display:flex;gap:8px">' +
+          '<button onclick="calApprove(\'' + r.id + '\')" style="flex:1;padding:7px;background:#1a5e38;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">✅ 核准</button>' +
+          '<button onclick="calReject(\'' + r.id + '\')" style="flex:1;padding:7px;background:#e74c3c;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">❌ 拒絕</button>' +
+          '</div>'
+        : '';
       return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
-        '<div class="leave-meta">'+r.days+'天<br>代理人：'+(r.proxy_name||'—')+'</div></div>';
+        '<div class="leave-meta">'+r.days+'天<br>代理人：'+(r.proxy_name||'—')+'</div>' +
+        reviewBtns + '</div>';
     }).join('');
   }
   if (myProxies.length) {
@@ -1108,6 +1116,31 @@ function showCalDay(ds) {
 }
 
 
+
+async function calApprove(id) {
+  if (!confirm('確定核准這筆假單？')) return;
+  const pool = allUnitLeaves.concat(allGmLeaves);
+  const r = pool.find(x=>x.id===id || x.id===Number(id));
+  if (!r) return;
+  await sb.from('leave_requests').update({
+    status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
+  }).eq('id', id);
+  if (r.leave_type==='休假') {
+    const { data:emp } = await sb.from('employees').select('used_leave_days').eq('emp_no',r.emp_no).single();
+    if (emp) await sb.from('employees').update({used_leave_days:(emp.used_leave_days||0)+r.days}).eq('emp_no',r.emp_no);
+  }
+  await loadCalendar();
+}
+
+async function calReject(id) {
+  const reason = prompt('拒絕原因（可留空）：');
+  if (reason === null) return; // 取消
+  await sb.from('leave_requests').update({
+    status:'rejected', reviewed_by:currentUser.name,
+    reviewed_at:new Date().toISOString(), reject_reason:reason||null
+  }).eq('id', id);
+  await loadCalendar();
+}
 
 function calPrev() { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); }
 function calNext() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); }
