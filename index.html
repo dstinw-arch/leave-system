@@ -1089,7 +1089,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v59 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v60 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1250,8 +1250,13 @@ function downloadLeaves() {
   var rows = filtered.map(function(r, i) {
     var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
     // 三日以上總經理審核日期：reviewer_type=gm 且天數>=3 且已審核
-    var gmReviewDate = (r.reviewer_type==='gm' && r.days>=3 && r.reviewed_at)
-      ? r.reviewed_at.split('T')[0] : '';
+    // W欄：3天以上已核准假單的審核日期，2026-02-13 改 2026-02-14
+    var gmReviewDate = '';
+    if (r.days >= 3 && r.status === 'approved' && r.reviewed_at) {
+      var reviewDate = r.reviewed_at.split('T')[0];
+      if (reviewDate === '2026-02-13') reviewDate = '2026-02-14';
+      gmReviewDate = reviewDate;
+    }
     return [
       i+1,
       r.created_at ? r.created_at.split('T')[0] : '',
@@ -1360,8 +1365,8 @@ async function importLeaves(input) {
         days: days, reason: reason,
         proxy_name: proxyName, proxy_duty: proxyDuty,
         status: 'approved', reviewer_type: 'unit',
-        reviewed_by: currentUser.name,
-        reviewed_at: new Date().toISOString()
+        reviewed_by: cols[20] ? String(cols[20]).trim() : null,
+        reviewed_at: null
       });
     }
 
