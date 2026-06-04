@@ -600,11 +600,16 @@ function showPage(id, btn) {
 // ── 判斷假單應送誰審核 ──
 // 主管和理事主席 → 總經理審核
 // 其他員工 → 所屬單位主管審核
+// 直接對理事主席的人員：總經理蔡景偉 + 副總/總稽核邱煥宸
+const DIRECT_TO_CHAIRMAN = ['0881032', '0891009'];
+
 function getReviewerType(emp) {
   // 理事主席不需送審
   if (emp.emp_no === CHAIRMAN_EMP_NO) return 'chairman';
-  // 總經理/副總 → 理事主席審核
-  if (emp.is_gm) return 'chairman';
+  // 總經理、邱副總（總稽核）→ 直接送理事主席
+  if (DIRECT_TO_CHAIRMAN.includes(emp.emp_no)) return 'chairman';
+  // 其他副總（張君明、高稵婕）→ 送總經理審核
+  if (emp.is_gm) return 'gm';
   // 分社主管/副主管 → 總經理審核
   if ((emp.is_manager || emp.is_sub_manager) && !/^7(-|$)/.test(emp.unit_id)) return 'gm';
   // 管理部所有人（含主管）→ 直屬長官審核，用 reviewer_emp_no 欄位標示
@@ -652,6 +657,21 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
     borderColor = getLeaveColor(r.leave_type);
   }
   var itemStyle = borderColor ? 'border-left-color:'+borderColor+';' : '';
+  // 流程標示
+  var flowLabel = '';
+  if (isGm || (r.reviewer_type === 'gm')) {
+    if (r.reviewed_by) {
+      flowLabel = '已由 ' + r.reviewed_by + ' 核准 → 待總經理審核';
+    } else {
+      flowLabel = '單位主管 → 待總經理審核';
+    }
+  } else if (r.reviewer_type === 'chairman') {
+    if (r.reviewed_by && r.status === 'pending') {
+      flowLabel = '已由 ' + r.reviewed_by + ' 核准 → 待理事主席審核';
+    }
+  }
+  var flowHtml = flowLabel ? '<div style="font-size:11px;color:#888;margin-top:3px;">📋 ' + flowLabel + '</div>' : '';
+
   return '<div class="leave-item ' + r.status + '" style="'+itemStyle+'">' +
     '<div class="leave-header">' +
       '<div class="leave-name">' + namePrefix + r.leave_type + ' — ' + r.leave_subtype + '</div>' +
@@ -663,6 +683,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
       '代理人：' + (r.proxy_name||'—') + (r.proxy_duty ? '（' + r.proxy_duty + '）' : '') +
       (r.status==='rejected' && r.reject_reason ? '<br>拒絕原因：' + r.reject_reason : '') +
     '</div>' +
+    flowHtml +
     (actionBtns ? '<div class="leave-actions">' + actionBtns + '</div>' : '') +
   '</div>';
 }
@@ -740,7 +761,7 @@ async function doSubmitLeave() {
 // ── 主管審核 ──
 // 管理部主管：reviewer_emp_no = 自己；分社主管：unit_id + reviewer_type=unit
 async function loadMgrReview() {
-  var isMgmtMgr = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && currentUser.emp_no !== GM_EMP_NO;
+  var isMgmtMgr = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
   var query;
   if (isMgmtMgr) {
     query = sb.from('leave_requests').select('*')
@@ -769,7 +790,7 @@ async function loadMgrReview() {
 // 副總經理：看直屬科主管（reviewer_emp_no = 自己，type=mgmt）
 // 總經理：看分社主管（reviewer_type=gm）
 async function loadGmReview() {
-  var isVGM = currentUser.is_gm && currentUser.emp_no !== GM_EMP_NO;
+  var isVGM = currentUser.is_gm && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
   var query;
   if (isVGM) {
     query = sb.from('leave_requests').select('*')
@@ -944,7 +965,7 @@ async function loadCalendar() {
     calEmpNos = (mgrsRes.data||[]).filter(function(e){ return !mgmtIds.includes(e.unit_id); })
       .concat(gmRes.data||[]).map(function(e){ return e.emp_no; });
 
-  } else if (currentUser.is_gm && currentUser.emp_no !== GM_EMP_NO) {
+  } else if (currentUser.is_gm && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no)) {
     // 副總經理（非總經理）：直屬科主管 + 直屬長官
     var subsRes = await sb.from('employees').select('emp_no')
       .eq('supervisor_emp_no', currentUser.emp_no);
@@ -1021,7 +1042,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v53 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v55 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
