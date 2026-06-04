@@ -263,7 +263,9 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div class="form-row">
           <label>職務代理人姓名</label>
-          <input type="text" id="apply-proxy-name" placeholder="代理人姓名（必填）" />
+          <input type="text" id="apply-proxy-name" placeholder="代理人姓名（必填）" autocomplete="off" oninput="searchProxy(this.value)" />
+          <div id="proxy-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);display:none;max-height:180px;overflow-y:auto;margin-top:2px;"></div>
+          <div id="proxy-info" style="font-size:12px;color:var(--muted);margin-top:4px;display:none;"></div>
         </div>
         <div id="apply-error" class="error-msg"></div>
         <br>
@@ -687,6 +689,48 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
 }
 
 
+var proxyData = {}; // 存代理人資料 {emp_no, unit_name, title}
+
+function searchProxy(val) {
+  var sug = document.getElementById('proxy-suggestions');
+  var info = document.getElementById('proxy-info');
+  proxyData = {};
+  if (!val || val.length < 1) { sug.style.display='none'; info.style.display='none'; return; }
+  // 從 employees 搜尋符合名字的人（排除自己）
+  sb.from('employees').select('emp_no,name,unit_name,title')
+    .ilike('name', '%'+val+'%')
+    .neq('emp_no', currentUser.emp_no)
+    .eq('is_active', true)
+    .limit(8)
+    .then(function(res) {
+      var matches = res.data || [];
+      if (!matches.length) { sug.style.display='none'; return; }
+      sug.innerHTML = matches.map(function(e) {
+        return '<div onclick="selectProxy(\'' + e.emp_no + '\',\'' + e.name + '\',\'' + e.unit_name + '\',\'' + (e.title||'') + '\')"; style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'\'">' +
+          '<b>' + e.name + '</b> <span style="color:var(--muted);font-size:11px;">' + e.unit_name + ' · ' + (e.title||'') + '</span>' +
+        '</div>';
+      }).join('');
+      sug.style.display = 'block';
+    });
+}
+
+function selectProxy(empNo, name, unitName, title) {
+  document.getElementById('apply-proxy-name').value = name;
+  document.getElementById('proxy-suggestions').style.display = 'none';
+  proxyData = { emp_no: empNo, unit_name: unitName, title: title };
+  var info = document.getElementById('proxy-info');
+  info.textContent = '✅ ' + unitName + ' · ' + title;
+  info.style.display = 'block';
+}
+
+// 點別處關閉下拉
+document.addEventListener('click', function(e) {
+  if (!e.target.closest || !e.target.closest('#apply-proxy-name, #proxy-suggestions')) {
+    var sug = document.getElementById('proxy-suggestions');
+    if (sug) sug.style.display = 'none';
+  }
+});
+
 function updateSubtype() {
   const type = document.getElementById('apply-type').value;
   const sub = document.getElementById('apply-subtype');
@@ -742,6 +786,9 @@ async function doSubmitLeave() {
     leave_type:type, leave_subtype:subtype, start_date:startDate, end_date:endDate,
     start_time:startTime, end_time:endTime, days, reason,
     proxy_name:proxyName, proxy_duty:proxyDuty,
+    proxy_emp_no:proxyData.emp_no||null,
+    proxy_unit:proxyData.unit_name||null,
+    proxy_title:proxyData.title||null,
     status:'pending', reviewer_type:reviewerType
   };
   // 管理部假單：附上直屬長官員工編號
@@ -752,6 +799,8 @@ async function doSubmitLeave() {
   if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
   alert('✅ 假單已送出，等待審核');
   ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty'].forEach(id=>document.getElementById(id).value='');
+  proxyData = {};
+  var pi = document.getElementById('proxy-info'); if(pi) { pi.textContent=''; pi.style.display='none'; }
   showPage('emp-home', document.getElementById('bnav-emp-home'));
   loadEmpHome();
 }
@@ -1040,7 +1089,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v57 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v59 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1190,18 +1239,28 @@ function downloadLeaves() {
   if (status) filtered = filtered.filter(function(r){ return r.status===status; });
   if (!filtered.length) { alert('沒有資料可下載'); return; }
 
-  var headers = ['請假編號','申請日期','申請人姓名','員工編號','單位','職稱','假別','假別細項','事由','請假起日','請假迄日','天數','起始時間','結束時間','代理人姓名','代理人擔任事務','狀態','審核人'];
+  // 欄位對應「給clude請假紀錄.xlsx」格式（22欄）
+  var headers = [
+    '請假編號','申請日期','申請人姓名','申請人員工編號','申請人單位','申請人職稱','申請人擔任事務',
+    '假別','假別細項','事由',
+    '請假起日','請假迄日','天數','起始時間','結束時間',
+    '代理人姓名','代理人員工編號','代理人單位','代理人職稱','代理人擔任事務',
+    '審核人','三日以上總經理審核日期'
+  ];
   var rows = filtered.map(function(r, i) {
+    var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
+    // 三日以上總經理審核日期：reviewer_type=gm 且天數>=3 且已審核
+    var gmReviewDate = (r.reviewer_type==='gm' && r.days>=3 && r.reviewed_at)
+      ? r.reviewed_at.split('T')[0] : '';
     return [
       i+1,
       r.created_at ? r.created_at.split('T')[0] : '',
-      r.emp_name||'', r.emp_no||'', r.unit_name||'',
+      r.emp_name||'', r.emp_no||'', r.unit_name||'', r.title||'', '',
       r.leave_type||'', r.leave_subtype||'', r.reason||'',
       r.start_date||'', r.end_date||'', r.days||'',
       r.start_time||'', r.end_time||'',
-      r.proxy_name||'', r.proxy_duty||'',
-      r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核',
-      r.reviewed_by||''
+      r.proxy_name||'', r.proxy_emp_no||'', r.proxy_unit||'', r.proxy_title||'', r.proxy_duty||'',
+      r.reviewed_by||'', gmReviewDate
     ];
   });
 
