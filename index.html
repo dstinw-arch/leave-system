@@ -304,7 +304,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 
     <!-- 理事主席：審核總經理/副總 -->
     <div id="chairman-review" class="page">
-      <div class="page-title">總經理假單審核</div>
+      <div class="page-title">假單審核</div>
       <div id="chairman-approve-all-bar" style="display:none;margin-bottom:.75rem">
         <button onclick="approveAllLeaves('chairman')" style="background:#1a5e38;color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:14px;font-weight:600;">✅ 一鍵核准全部待審</button>
       </div>
@@ -1042,7 +1042,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v55 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v56 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
