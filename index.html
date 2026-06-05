@@ -880,9 +880,18 @@ async function loadChairmanReview() {
 }
 
 // ── 人事：全員假單 ──
+var empCache = {}; // emp_no -> {title, duty}
+var empProxyCache = {}; // name -> {emp_no, unit_name, title}
+
 async function loadHrAll() {
   var result = await sb.from('leave_requests').select('*').order('start_date',{ascending:false});
   allHrLeaves = result.data || [];
+  // 載入員工資料快取（補 F、G、Q、R、S 欄用）
+  var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty');
+  (empRes.data||[]).forEach(function(e){
+    empCache[e.emp_no] = {title: e.title||'', duty: e.duty||''};
+    empProxyCache[e.name] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
+  });
   var FIXED_UNITS = [["7","管理部"], ["16","營業部"], ["25","水碓分社"], ["34","竹圍分社"], ["43","英專分社"], ["52","義山分社"], ["61","三芝分社"], ["70","八里分社"], ["89","成州分社"], ["98","五股分社"], ["104","萬金分社"], ["113","新莊分社"], ["122","泰山分社"], ["131","林口分社"], ["140","板橋分社"], ["159","蘆洲分社"], ["168","三重分社"]];
   var unitSel = document.getElementById('hr-filter-unit');
   unitSel.innerHTML = '<option value="">所有單位</option>' + FIXED_UNITS.map(function(u){ return '<option value="'+u[1]+'">'+u[1]+'</option>'; }).join('');
@@ -1089,7 +1098,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v64 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v65 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1255,7 +1264,14 @@ function downloadLeaves() {
     '代理人姓名','代理人員工編號','代理人單位','代理人職稱','代理人擔任事務',
     '審核人','三日以上總經理審核日期'
   ];
-  var maxDocNo = 652;
+  // 動態計算最大 doc_no（純數字的）
+  var maxDocNo = filtered.reduce(function(max, r) {
+    if (r.doc_no && /^\d+$/.test(r.doc_no)) {
+      var n = parseInt(r.doc_no);
+      return n > max ? n : max;
+    }
+    return max;
+  }, 655);
   var newSeq = 0;
   var rows = filtered.map(function(r, i) {
     var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
@@ -1270,11 +1286,17 @@ function downloadLeaves() {
     return [
       r.doc_no || String(maxDocNo + (++newSeq)),
       r.created_at ? r.created_at.split('T')[0] : '',
-      r.emp_name||'', r.emp_no||'', r.unit_name||'', r.title||'', r.duty||'',
+      r.emp_name||'', r.emp_no||'', r.unit_name||'',
+      r.title || (empCache[r.emp_no]||{}).title || '',
+      r.duty || (empCache[r.emp_no]||{}).duty || '',
       r.leave_type||'', r.leave_subtype||'', r.reason||'',
       r.start_date||'', r.end_date||'', r.days||'',
       r.start_time||'', r.end_time||'',
-      r.proxy_name||'', r.proxy_emp_no||'', r.proxy_unit||'', r.proxy_title||'', r.proxy_duty||'',
+      r.proxy_name||'',
+      r.proxy_emp_no || (empProxyCache[r.proxy_name]||{}).emp_no || '',
+      r.proxy_unit || (empProxyCache[r.proxy_name]||{}).unit_name || '',
+      r.proxy_title || (empProxyCache[r.proxy_name]||{}).title || '',
+      r.proxy_duty||'',
       r.reviewed_by||'', gmReviewDate
     ];
   });
