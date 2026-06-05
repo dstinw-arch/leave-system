@@ -1089,7 +1089,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v62 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v63 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1247,6 +1247,8 @@ function downloadLeaves() {
     '代理人姓名','代理人員工編號','代理人單位','代理人職稱','代理人擔任事務',
     '審核人','三日以上總經理審核日期'
   ];
+  var maxDocNo = 652;
+  var newSeq = 0;
   var rows = filtered.map(function(r, i) {
     var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
     // 三日以上總經理審核日期：reviewer_type=gm 且天數>=3 且已審核
@@ -1258,7 +1260,7 @@ function downloadLeaves() {
       gmReviewDate = reviewDate;
     }
     return [
-      r.doc_no || (i+1),
+      r.doc_no || String(maxDocNo + (++newSeq)),
       r.created_at ? r.created_at.split('T')[0] : '',
       r.emp_name||'', r.emp_no||'', r.unit_name||'', r.title||'', r.duty||'',
       r.leave_type||'', r.leave_subtype||'', r.reason||'',
