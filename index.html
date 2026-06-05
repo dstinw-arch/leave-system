@@ -1089,7 +1089,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v63 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v64 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1234,10 +1234,18 @@ async function doSettingChangePw() {
 function downloadLeaves() {
   const unit = document.getElementById('hr-filter-unit').value;
   const status = document.getElementById('hr-filter-status').value;
-  let filtered = allHrLeaves;
+  let filtered = allHrLeaves.slice();
   if (unit) filtered = filtered.filter(function(r){ return r.unit_name===unit; });
   if (status) filtered = filtered.filter(function(r){ return r.status===status; });
   if (!filtered.length) { alert('沒有資料可下載'); return; }
+  // 按 doc_no 排序（有的排前面），沒有 doc_no 的按 created_at 排後面
+  filtered.sort(function(a,b){
+    var an = a.doc_no ? parseInt(a.doc_no) || a.doc_no : Infinity;
+    var bn = b.doc_no ? parseInt(b.doc_no) || b.doc_no : Infinity;
+    if (an === Infinity && bn === Infinity) return new Date(a.created_at) - new Date(b.created_at);
+    if (typeof an === 'number' && typeof bn === 'number') return an - bn;
+    return String(an).localeCompare(String(bn));
+  });
 
   // 欄位對應「給clude請假紀錄.xlsx」格式（22欄）
   var headers = [
