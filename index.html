@@ -623,11 +623,15 @@ var myLeaveData = [];
 
 async function loadEmpHome() {
   var emp = currentUser;
-  var remain = (emp.annual_leave_days||0) - (emp.used_leave_days||0);
-  document.getElementById('emp-remain').textContent = remain.toFixed(1);
-  document.getElementById('emp-used').textContent = (emp.used_leave_days||0).toFixed(1);
   var res = await sb.from('leave_requests').select('*').eq('emp_no', emp.emp_no).order('start_date',{ascending:false});
   myLeaveData = res.data || [];
+  // 即時從已核准假單加總已使用特休天數（不依賴 used_leave_days 欄位）
+  var usedDays = myLeaveData
+    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假'; })
+    .reduce(function(sum, r){ return sum + (r.days||0); }, 0);
+  var remain = (emp.annual_leave_days||0) - usedDays;
+  document.getElementById('emp-remain').textContent = remain.toFixed(1);
+  document.getElementById('emp-used').textContent = usedDays.toFixed(1);
   filterEmpLeaves();
 }
 
@@ -959,10 +963,6 @@ async function approveAllLeaves(src) {
     await sb.from('leave_requests').update({
       status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
     }).eq('id', r.id);
-    if (r.leave_type==='休假') {
-      const { data:emp } = await sb.from('employees').select('used_leave_days').eq('emp_no',r.emp_no).single();
-      if (emp) await sb.from('employees').update({used_leave_days:(emp.used_leave_days||0)+r.days}).eq('emp_no',r.emp_no);
-    }
   }
   if (src==='gm') loadGmReview();
   else if (src==='chairman') loadChairmanReview();
@@ -977,10 +977,6 @@ async function approveLeave() {
   await sb.from('leave_requests').update({
     status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
   }).eq('id', currentLeaveId);
-  if (r && r.leave_type==='休假') {
-    const { data:emp } = await sb.from('employees').select('used_leave_days').eq('emp_no',r.emp_no).single();
-    if (emp) await sb.from('employees').update({used_leave_days:(emp.used_leave_days||0)+r.days}).eq('emp_no',r.emp_no);
-  }
   closeModal();
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
@@ -1202,10 +1198,6 @@ async function calApprove(id) {
   await sb.from('leave_requests').update({
     status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
   }).eq('id', id);
-  if (r.leave_type==='休假') {
-    const { data:emp } = await sb.from('employees').select('used_leave_days').eq('emp_no',r.emp_no).single();
-    if (emp) await sb.from('employees').update({used_leave_days:(emp.used_leave_days||0)+r.days}).eq('emp_no',r.emp_no);
-  }
   await loadCalendar();
 }
 
@@ -1429,22 +1421,7 @@ async function importLeaves(input) {
       return;
     }
 
-    // 匯入後重新計算每位員工的已使用特休天數
-    var empUsedMap = {};
-    records.forEach(function(r) {
-      if (r.leave_type === '休假' && r.status === 'approved') {
-        if (!empUsedMap[r.emp_no]) empUsedMap[r.emp_no] = 0;
-        empUsedMap[r.emp_no] += r.days;
-      }
-    });
-    var empNos = Object.keys(empUsedMap);
-    for (var k = 0; k < empNos.length; k++) {
-      var eno = empNos[k];
-      var empRes = await sb.from('employees').select('used_leave_days').eq('emp_no', eno).single();
-      if (empRes.data) {
-        await sb.from('employees').update({ used_leave_days: empUsedMap[eno] }).eq('emp_no', eno);
-      }
-    }
+    // 匯入完成，used_leave_days 已改為即時從 leave_requests 計算，不需回寫
     msgEl.style.color = 'var(--success)';
     msgEl.textContent = '✅ 成功匯入/更新 ' + deduped.length + ' 筆，跳過 ' + skipped + ' 筆（Excel內重複 ' + skippedDup + ' 筆）';
     input.value = '';
@@ -1543,15 +1520,6 @@ async function deleteLeave(id) {
   
   var result = await sb.from('leave_requests').delete().eq('id', id);
   if (result.error) { alert('刪除失敗：' + result.error.message); return; }
-  
-  // 如果是已核准的休假，要還原已使用天數
-  if (r && r.status === 'approved' && r.leave_type === '休假') {
-    var empResult = await sb.from('employees').select('used_leave_days').eq('emp_no', r.emp_no).single();
-    if (empResult.data) {
-      var newUsed = Math.max(0, (empResult.data.used_leave_days || 0) - r.days);
-      await sb.from('employees').update({ used_leave_days: newUsed }).eq('emp_no', r.emp_no);
-    }
-  }
   
   alert('✅ 已刪除假單');
   loadHrAll();
