@@ -619,6 +619,52 @@ function getReviewerType(emp) {
   return 'unit';
 }
 
+// ── LINE 通知 ──
+async function sendLineNotify(lineUserId, message) {
+  if (!lineUserId) return;
+  try {
+    await fetch('https://nloegbeggwyprtqickqs.supabase.co/functions/v1/line-notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line_user_id: lineUserId, message: message }),
+    });
+  } catch(e) { console.log('LINE notify error', e); }
+}
+
+async function notifyManager(emp, leaveInfo) {
+  var reviewerType = getReviewerType(emp);
+  var managerRes = null;
+  if (reviewerType === 'mgmt' && emp.supervisor_emp_no) {
+    managerRes = await sb.from('employees').select('line_user_id').eq('emp_no', emp.supervisor_emp_no).single();
+  } else if (reviewerType === 'unit') {
+    managerRes = await sb.from('employees').select('line_user_id').eq('unit_id', emp.unit_id).eq('is_manager', true).maybeSingle();
+  } else if (reviewerType === 'gm') {
+    managerRes = await sb.from('employees').select('line_user_id').eq('emp_no', GM_EMP_NO).single();
+  } else if (reviewerType === 'chairman') {
+    managerRes = await sb.from('employees').select('line_user_id').eq('emp_no', CHAIRMAN_EMP_NO).single();
+  }
+  if (managerRes && managerRes.data && managerRes.data.line_user_id) {
+    await sendLineNotify(managerRes.data.line_user_id, leaveInfo);
+  }
+}
+
+async function notifyEmployee(empNo, message) {
+  var res = await sb.from('employees').select('line_user_id').eq('emp_no', empNo).single();
+  if (res.data && res.data.line_user_id) {
+    await sendLineNotify(res.data.line_user_id, message);
+  }
+}
+
+async function notifyGM(message) {
+  var res = await sb.from('employees').select('line_user_id').eq('emp_no', GM_EMP_NO).single();
+  if (res.data && res.data.line_user_id) await sendLineNotify(res.data.line_user_id, message);
+}
+
+async function notifyChairman(message) {
+  var res = await sb.from('employees').select('line_user_id').eq('emp_no', CHAIRMAN_EMP_NO).single();
+  if (res.data && res.data.line_user_id) await sendLineNotify(res.data.line_user_id, message);
+}
+
 var myLeaveData = [];
 
 async function loadEmpHome() {
@@ -801,6 +847,12 @@ async function doSubmitLeave() {
   }
   const { error } = await sb.from('leave_requests').insert(insertData);
   if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
+  // LINE 通知主管
+  var leaveMsg = '[請假通知] ' + emp.name + ' 申請 ' + type + subtype + '\n' +
+    '期間：' + startDate + (days > 0.5 ? ' ~ ' + endDate : '') + '\n' +
+    '天數：' + days + ' 天\n' +
+    '事由：' + reason;
+  await notifyManager(emp, leaveMsg);
   alert('✅ 假單已送出，等待審核');
   ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty'].forEach(id=>document.getElementById(id).value='');
   proxyData = {};
@@ -978,6 +1030,22 @@ async function approveLeave() {
     status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
   }).eq('id', currentLeaveId);
   closeModal();
+  if (r) {
+    // 主管核准：若天數>=3且非總經理/理事主席審核，通知總經理
+    if ((r.days||0) >= 3 && currentReviewSource === 'unit') {
+      var gmMsg = '[請假通知] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
+        '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
+        '天數：' + r.days + ' 天（已獲主管核准，請您確認）';
+      await notifyGM(gmMsg);
+    }
+    // 總經理/理事主席核准：通知員工
+    if (currentReviewSource === 'gm' || currentReviewSource === 'chairman') {
+      var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
+        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
+        r.days + ' 天';
+      await notifyEmployee(r.emp_no, empMsg);
+    }
+  }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
   else if (currentReviewSource==='chairman') loadChairmanReview();
@@ -988,11 +1056,19 @@ async function approveLeave() {
 async function rejectLeave() {
   if (!currentLeaveId) return;
   const reason = document.getElementById('modal-reject-reason').value.trim();
+  const pool = currentReviewSource==='gm' ? allGmLeaves : currentReviewSource==='hr' ? allHrLeaves : allUnitLeaves;
+  const r = pool.find(x=>x.id===currentLeaveId);
   await sb.from('leave_requests').update({
     status:'rejected', reviewed_by:currentUser.name,
     reviewed_at:new Date().toISOString(), reject_reason:reason||null
   }).eq('id', currentLeaveId);
   closeModal();
+  if (r) {
+    var empMsg = '[請假結果] 您的假單已被拒絕 ❌\n' +
+      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      (reason ? '原因：' + reason : '');
+    await notifyEmployee(r.emp_no, empMsg);
+  }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
   else if (currentReviewSource==='chairman') loadChairmanReview();
@@ -1094,7 +1170,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v65 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v67 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
