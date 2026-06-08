@@ -715,7 +715,9 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   var flowLabel = '';
   if (r.reviewer_type === 'gm') {
     // 一般員工假單：由單位主管核准後轉給總經理
-    if (r.reviewed_by) {
+    if (r.mgr_approved_by) {
+      flowLabel = '已由 ' + r.mgr_approved_by + ' 核准 → 總經理審核';
+    } else if (r.reviewed_by) {
       flowLabel = '已由 ' + r.reviewed_by + ' 核准 → 總經理審核';
     } else {
       flowLabel = '直送總經理審核';
@@ -1209,7 +1211,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v69 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v70 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
