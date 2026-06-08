@@ -615,9 +615,9 @@ function getReviewerType(emp) {
   // 其他副總（張君明、高稵婕）→ 送總經理審核
   if (emp.is_gm) return 'gm';
   // 分社主管/副主管 → 總經理審核
-  if ((emp.is_manager || emp.is_sub_manager) && !/^7(-|$)/.test(emp.unit_id)) return 'gm';
-  // 管理部所有人（含主管）→ 直屬長官審核，用 reviewer_emp_no 欄位標示
-  if (emp.unit_id && /^7(-|$)/.test(emp.unit_id)) return 'mgmt';
+  if ((emp.is_manager || emp.is_sub_manager) && emp.unit_id && !emp.unit_id.startsWith('7')) return 'gm';
+  // 管理部所有人（unit_id 開頭是7）→ 直屬長官審核
+  if (emp.unit_id && emp.unit_id.startsWith('7')) return 'mgmt';
   return 'unit';
 }
 
@@ -868,7 +868,7 @@ async function doSubmitLeave() {
 // ── 主管審核 ──
 // 管理部主管：reviewer_emp_no = 自己；分社主管：unit_id + reviewer_type=unit
 async function loadMgrReview() {
-  var isMgmtMgr = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
+  var isMgmtMgr = currentUser.unit_id && currentUser.unit_id.startsWith('7') && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
   var query;
   if (isMgmtMgr) {
     query = sb.from('leave_requests').select('*')
@@ -1122,20 +1122,21 @@ async function loadCalendar() {
 
   var calEmpNos = [];
 
-  var mgmtIds = ['7','7-01','7-02','7-03','7-04','7-05','7-06','7-07','7-08','7-09','7-10','7-11','7-12','7-13'];
+  var branchIds = ['16','25','34','43','52','61','70','89','98','104','113','122','131','140','159','168']; // 分社
+  var mgmtIds = branchIds; // 用來過濾：管理部=7開頭，分社=以下數字
 
   if (isChairman) {
     // 理事主席：各分社主管 + 總經理/副總
     var mgrsRes = await sb.from('employees').select('emp_no,unit_id').eq('is_manager', true);
     var gmRes = await sb.from('employees').select('emp_no').eq('is_gm', true);
-    calEmpNos = (mgrsRes.data||[]).filter(function(e){ return !mgmtIds.includes(e.unit_id); })
+    calEmpNos = (mgrsRes.data||[]).filter(function(e){ return branchIds.includes(e.unit_id); })
       .concat(gmRes.data||[]).map(function(e){ return e.emp_no; });
 
   } else if (currentUser.emp_no === GM_EMP_NO) {
     // 總經理（蔡景偉 General Manager）：各分社主管 + 所有副總
     var mgrsRes = await sb.from('employees').select('emp_no,unit_id').eq('is_manager', true);
     var gmRes = await sb.from('employees').select('emp_no,unit_id').eq('is_gm', true);
-    var filteredMgrs = (mgrsRes.data||[]).filter(function(e){ return !mgmtIds.includes(e.unit_id); });
+    var filteredMgrs = (mgrsRes.data||[]).filter(function(e){ return branchIds.includes(e.unit_id); });
     var filteredGm = (gmRes.data||[]);
     if (dbg) dbg.textContent += ' mgrs:'+filteredMgrs.length+' gms:'+filteredGm.length;
     calEmpNos = filteredMgrs.concat(filteredGm).map(function(e){ return e.emp_no; });
@@ -1154,14 +1155,14 @@ async function loadCalendar() {
       .eq('emp_no', currentUser.supervisor_emp_no);
     calEmpNos = (subsRes.data||[]).concat(bosRes.data||[]).map(function(e){ return e.emp_no; });
 
-  } else if ((currentUser.is_manager || currentUser.is_sub_manager) && currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id)) {
+  } else if ((currentUser.is_manager || currentUser.is_sub_manager) && currentUser.unit_id && currentUser.unit_id.startsWith('7')) {
     // 管理部主管：直屬部屬 + 自己的直屬長官
     var subsRes = await sb.from('employees').select('emp_no')
       .eq('supervisor_emp_no', currentUser.emp_no);
     calEmpNos = (subsRes.data||[]).map(function(e){ return e.emp_no; });
     if (currentUser.supervisor_emp_no) calEmpNos.push(currentUser.supervisor_emp_no);
 
-  } else if (currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id)) {
+  } else if (currentUser.unit_id && currentUser.unit_id.startsWith('7')) {
     // 管理部一般員工：直屬部屬（不太可能有）+ 自己的直屬長官
     calEmpNos = [];
     if (currentUser.supervisor_emp_no) calEmpNos.push(currentUser.supervisor_emp_no);
@@ -1211,7 +1212,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v70 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v71 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1269,7 +1270,7 @@ function showCalDay(ds) {
   if (!myLeaves.length && !myProxies.length) { detail.innerHTML='<div class="empty-hint">'+ds+' 無紀錄</div>'; return; }
   if (myLeaves.length) {
     // 管理部一般員工看到直屬長官假單時也要顯示名字
-    var isMgmtStaff = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !currentUser.is_manager && !currentUser.is_gm;
+    var isMgmtStaff = currentUser.unit_id && currentUser.unit_id.startsWith('7') && !currentUser.is_manager && !currentUser.is_gm;
     var isMgrView = currentUser.is_manager || currentUser.is_gm || currentUser.is_sub_manager || currentUser.emp_no === CHAIRMAN_EMP_NO || isMgmtStaff;
     var leaveTitle = isMgmtStaff
       ? ds+' 請假紀錄（'+myLeaves.length+'筆）'
