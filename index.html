@@ -1199,7 +1199,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v72 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v73 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1277,7 +1277,9 @@ function showCalDay(ds) {
           // 直送理事主席的副總：只能審 reviewer_emp_no = 自己 的假單
           canReview = r.reviewer_emp_no === currentUser.emp_no && r.reviewer_type === 'mgmt';
         } else if (currentUser.is_gm) {
-          canReview = r.reviewer_type === 'gm';
+          // 總經理：reviewer_type=gm；副總：reviewer_emp_no=自己 AND reviewer_type=mgmt
+          canReview = r.reviewer_type === 'gm' ||
+            (r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no);
         } else if (currentUser.is_manager || currentUser.is_sub_manager) {
           canReview = (r.reviewer_type === 'unit' && r.unit_id === currentUser.unit_id) ||
                       (r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no);
