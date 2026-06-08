@@ -894,13 +894,16 @@ async function loadMgrReview() {
 // 總經理：看分社主管（reviewer_type=gm）
 async function loadGmReview() {
   var isVGM = currentUser.is_gm && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
+  var isDTC = DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no) && currentUser.emp_no !== CHAIRMAN_EMP_NO;
   var query;
-  if (isVGM) {
+  if (isVGM || isDTC) {
+    // 副總或直送理事主席的人：只看 reviewer_emp_no = 自己 的假單
     query = sb.from('leave_requests').select('*')
       .eq('reviewer_emp_no', currentUser.emp_no)
       .eq('reviewer_type', 'mgmt')
       .order('created_at',{ascending:false});
   } else {
+    // 總經理：看全部 reviewer_type = gm 的假單
     query = sb.from('leave_requests').select('*')
       .eq('reviewer_type', 'gm')
       .order('created_at',{ascending:false});
