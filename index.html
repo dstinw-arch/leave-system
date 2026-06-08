@@ -603,12 +603,14 @@ function showPage(id, btn) {
 // 主管和理事主席 → 總經理審核
 // 其他員工 → 所屬單位主管審核
 // 直接對理事主席的人員：總經理蔡景偉 + 副總/總稽核邱煥宸
-const DIRECT_TO_CHAIRMAN = ['0881032', '0891009'];
+const DIRECT_TO_CHAIRMAN = ['0891009']; // 直送理事主席的副總（總稽核邱煥宸）
 
 function getReviewerType(emp) {
   // 理事主席不需送審
   if (emp.emp_no === CHAIRMAN_EMP_NO) return 'chairman';
-  // 總經理、邱副總（總稽核）→ 直接送理事主席
+  // 總經理（蔡景偉）→ 直接送理事主席
+  if (emp.emp_no === GM_EMP_NO) return 'chairman';
+  // 總稽核邱煥宸 → 直接送理事主席
   if (DIRECT_TO_CHAIRMAN.includes(emp.emp_no)) return 'chairman';
   // 其他副總（張君明、高稵婕）→ 送總經理審核
   if (emp.is_gm) return 'gm';
@@ -1035,7 +1037,7 @@ async function approveLeave() {
   closeModal();
   if (r) {
     // 主管核准：若天數>=3，通知總經理；同時通知員工
-    if ((r.days||0) >= 3 && currentReviewSource === 'unit') {
+    if ((r.days||0) >= 3 && (currentReviewSource === 'unit' || currentReviewSource === 'mgmt')) {
       var gmMsg = '[請假通知] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
         '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
         '天數：' + r.days + ' 天（已獲主管核准，請您確認）';
@@ -1174,7 +1176,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v67 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v68 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
