@@ -1034,20 +1034,18 @@ async function approveLeave() {
   }).eq('id', currentLeaveId);
   closeModal();
   if (r) {
-    // 主管核准：若天數>=3且非總經理/理事主席審核，通知總經理
+    // 主管核准：若天數>=3，通知總經理；同時通知員工
     if ((r.days||0) >= 3 && currentReviewSource === 'unit') {
       var gmMsg = '[請假通知] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
         '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
         '天數：' + r.days + ' 天（已獲主管核准，請您確認）';
       await notifyGM(gmMsg);
     }
-    // 總經理/理事主席核准：通知員工
-    if (currentReviewSource === 'gm' || currentReviewSource === 'chairman') {
-      var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
-        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-        r.days + ' 天';
-      await notifyEmployee(r.emp_no, empMsg);
-    }
+    // 任何階段核准都通知員工
+    var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
+      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      r.days + ' 天';
+    await notifyEmployee(r.emp_no, empMsg);
   }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
