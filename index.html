@@ -1054,35 +1054,33 @@ async function approveLeave() {
   if (!currentLeaveId) return;
   const pool = currentReviewSource==='gm' ? allGmLeaves : currentReviewSource==='hr' ? allHrLeaves : allUnitLeaves;
   const r = pool.find(x=>x.id===currentLeaveId);
-  await sb.from('leave_requests').update({
-    status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
-  }).eq('id', currentLeaveId);
+  if (!r) return;
   closeModal();
-  if (r) {
-    var isUnitApprove = currentReviewSource !== 'gm' && currentReviewSource !== 'chairman' && currentReviewSource !== 'hr';
-    var needsGM = (r.days||0) >= 3 && isUnitApprove;
+  var isUnitApprove = currentReviewSource !== 'gm' && currentReviewSource !== 'chairman' && currentReviewSource !== 'hr';
+  var needsGM = (r.days||0) >= 3 && isUnitApprove;
 
-    if (needsGM) {
-      // ≥3天且主管剛核准：轉交總經理，狀態改回 pending，記錄主管核准人
-      await sb.from('leave_requests').update({
-        status: 'pending',
-        reviewer_type: 'gm',
-        mgr_approved_by: currentUser.name,
-        reviewed_by: null,
-        reviewed_at: null
-      }).eq('id', r.id);
-      // 通知總經理
-      var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
-        '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
-        '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
-      await notifyGM(gmMsg);
-    } else {
-      // <3天 或 總經理/理事主席核准：直接通知員工
-      var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
-        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-        r.days + ' 天';
-      await notifyEmployee(r.emp_no, empMsg);
-    }
+  if (needsGM) {
+    // ≥3天且分社/管理部主管核准：轉交總經理審核
+    await sb.from('leave_requests').update({
+      status: 'pending',
+      reviewer_type: 'gm',
+      mgr_approved_by: currentUser.name,
+      reviewed_by: null,
+      reviewed_at: null
+    }).eq('id', r.id);
+    var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
+      '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
+    await notifyGM(gmMsg);
+  } else {
+    // <3天 或 總經理/理事主席核准：直接核准並通知員工
+    await sb.from('leave_requests').update({
+      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
+    }).eq('id', r.id);
+    var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
+      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      r.days + ' 天';
+    await notifyEmployee(r.emp_no, empMsg);
   }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
@@ -1199,7 +1197,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v74 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v75 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1316,9 +1314,29 @@ async function calApprove(id) {
   const pool = allUnitLeaves.concat(allGmLeaves);
   const r = pool.find(x=>x.id===id || x.id===Number(id));
   if (!r) return;
-  await sb.from('leave_requests').update({
-    status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
-  }).eq('id', id);
+  var isUnitApprove = currentUser.is_manager || currentUser.is_sub_manager;
+  var isGmOrChairman = currentUser.is_gm || currentUser.emp_no === CHAIRMAN_EMP_NO;
+  var needsGM = (r.days||0) >= 3 && isUnitApprove && !isGmOrChairman;
+
+  if (needsGM) {
+    await sb.from('leave_requests').update({
+      status: 'pending', reviewer_type: 'gm',
+      mgr_approved_by: currentUser.name,
+      reviewed_by: null, reviewed_at: null
+    }).eq('id', id);
+    var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
+      '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
+    await notifyGM(gmMsg);
+  } else {
+    await sb.from('leave_requests').update({
+      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
+    }).eq('id', id);
+    var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
+      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
+      r.days + ' 天';
+    await notifyEmployee(r.emp_no, empMsg);
+  }
   await loadCalendar();
 }
 
