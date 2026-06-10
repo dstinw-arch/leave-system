@@ -741,7 +741,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
     hrTopBar = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
       '<span style="font-size:12px;color:#555;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-weight:600;">編號：' + docNo + '</span>' +
       '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#555;cursor:pointer;">' +
-        '<input type="checkbox" ' + checked + ' onchange="togglePaperConfirm('' + r.id + '',this.checked)" style="width:16px;height:16px;cursor:pointer;">' +
+        '<input type="checkbox" ' + checked + ' onchange="togglePaperConfirm(\'' + r.id + '\',this.checked)" style="width:16px;height:16px;cursor:pointer;">' +
         '紙本已收' +
       '</label>' +
     '</div>';
@@ -1223,7 +1223,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v78 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v79 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
