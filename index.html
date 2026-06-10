@@ -733,7 +733,22 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   // reviewer_type='chairman' 的假單是直接對理事主席，不顯示流程標示
   var flowHtml = flowLabel ? '<div style="font-size:11px;color:#888;margin-top:3px;">📋 ' + flowLabel + '</div>' : '';
 
+  // 人事專用：請假編號 + 紙本確認打勾
+  var hrTopBar = '';
+  if (isHr) {
+    var docNo = r.doc_no || '—';
+    var checked = r.paper_confirmed ? 'checked' : '';
+    hrTopBar = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+      '<span style="font-size:12px;color:#555;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-weight:600;">編號：' + docNo + '</span>' +
+      '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#555;cursor:pointer;">' +
+        '<input type="checkbox" ' + checked + ' onchange="togglePaperConfirm('' + r.id + '',this.checked)" style="width:16px;height:16px;cursor:pointer;">' +
+        '紙本已收' +
+      '</label>' +
+    '</div>';
+  }
+
   return '<div class="leave-item ' + r.status + '" style="'+itemStyle+'">' +
+    hrTopBar +
     '<div class="leave-header">' +
       '<div class="leave-name">' + namePrefix + r.leave_type + ' — ' + r.leave_subtype + '</div>' +
       '<span class="leave-badge ' + (badgeMap[r.status]||'') + '">' + (statusMap[r.status]||r.status) + '</span>' +
@@ -749,6 +764,10 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   '</div>';
 }
 
+
+async function togglePaperConfirm(id, checked) {
+  await sb.from('leave_requests').update({ paper_confirmed: checked }).eq('id', id);
+}
 
 var proxyData = {}; // 存代理人資料 {emp_no, unit_name, title}
 
@@ -1204,7 +1223,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v76 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v78 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1384,6 +1403,7 @@ function downloadLeaves() {
   let filtered = allHrLeaves.slice();
   if (unit) filtered = filtered.filter(function(r){ return r.unit_name===unit; });
   if (status) filtered = filtered.filter(function(r){ return r.status===status; });
+  filtered = filtered.filter(function(r){ return r.status !== 'rejected'; });
   if (!filtered.length) { alert('沒有資料可下載'); return; }
   // 按 doc_no 排序（有的排前面），沒有 doc_no 的按 created_at 排後面
   filtered.sort(function(a,b){
