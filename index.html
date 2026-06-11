@@ -360,6 +360,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
             <option value="pending">待審核</option>
             <option value="approved">已核准</option>
             <option value="rejected">已拒絕</option>
+            <option value="unconfirmed">尚未打勾</option>
           </select>
           <select id="hr-filter-leave-type" onchange="filterHrLeaves()" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:#fff;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22%3E%3Cpath d=%22M0 0l5 6 5-6z%22 fill=%22%235a7a65%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;">
             <option value="">所有假別</option>
@@ -695,7 +696,11 @@ function filterEmpLeaves() {
   var status = document.getElementById('emp-filter-status') ? document.getElementById('emp-filter-status').value : '';
   var filtered = myLeaveData;
   if (type) filtered = filtered.filter(function(r){ return r.leave_type === type; });
-  if (status) filtered = filtered.filter(function(r){ return r.status === status; });
+  if (status === 'unconfirmed') {
+    filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
+  } else if (status) {
+    filtered = filtered.filter(function(r){ return r.status === status; });
+  }
   var list = document.getElementById('emp-leave-list');
   if (!filtered.length) { list.innerHTML='<div class="empty-hint">沒有符合的假單</div>'; return; }
   list.innerHTML = filtered.map(function(r){ return leaveItemHtml(r,false,false,false); }).join('');
@@ -979,7 +984,7 @@ var empCache = {}; // emp_no -> {title, duty}
 var empProxyCache = {}; // name -> {emp_no, unit_name, title}
 
 async function loadHrAll() {
-  var result = await sb.from('leave_requests').select('*').order('start_date',{ascending:false});
+  var result = await sb.from('leave_requests').select('*').order('doc_no',{ascending:false, nullsFirst:false});
   allHrLeaves = result.data || [];
   // 載入員工資料快取（補 F、G、Q、R、S 欄用）
   var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty');
@@ -1014,7 +1019,11 @@ function filterHrLeaves() {
   var filtered = allHrLeaves;
   if (unit) filtered = filtered.filter(function(r){ return r.unit_name === unit; });
   if (emp) filtered = filtered.filter(function(r){ return r.emp_name === emp; });
-  if (status) filtered = filtered.filter(function(r){ return r.status === status; });
+  if (status === 'unconfirmed') {
+    filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
+  } else if (status) {
+    filtered = filtered.filter(function(r){ return r.status === status; });
+  }
   if (leaveType) filtered = filtered.filter(function(r){ return r.leave_type === leaveType; });
   var countEl = document.getElementById('hr-count');
   if (countEl) countEl.textContent = '共 ' + filtered.length + ' 筆';
@@ -1223,7 +1232,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v79 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v81 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
