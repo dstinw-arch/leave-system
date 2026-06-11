@@ -1086,6 +1086,21 @@ async function approveAllLeaves(src) {
   alert('✅ 已處理 ' + pending.length + ' 筆假單');
 }
 
+async function getNextDocNo() {
+  const { data } = await sb.from('leave_requests')
+    .select('doc_no')
+    .not('doc_no', 'is', null)
+    .neq('doc_no', '');
+  var max = 0;
+  (data || []).forEach(function(r) {
+    if (/^\d+$/.test(r.doc_no)) {
+      var n = parseInt(r.doc_no);
+      if (n > max) max = n;
+    }
+  });
+  return String(max + 1);
+}
+
 async function approveLeave() {
   if (!currentLeaveId) return;
   const pool = currentReviewSource==='gm' ? allGmLeaves : currentReviewSource==='hr' ? allHrLeaves : allUnitLeaves;
@@ -1110,8 +1125,9 @@ async function approveLeave() {
     await notifyGM(gmMsg);
   } else {
     // <3天 或 總經理/理事主席核准：直接核准並通知員工
+    var docNo = r.doc_no || await getNextDocNo();
     await sb.from('leave_requests').update({
-      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
+      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', r.id);
     var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
@@ -1233,7 +1249,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v82 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v83 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1365,8 +1381,9 @@ async function calApprove(id) {
       '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
     await notifyGM(gmMsg);
   } else {
+    var docNo = r.doc_no || await getNextDocNo();
     await sb.from('leave_requests').update({
-      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
+      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', id);
     var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
