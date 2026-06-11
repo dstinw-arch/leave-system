@@ -230,7 +230,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <select id="apply-subtype"></select>
         </div>
         <div class="form-2col">
-          <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" /></div>
+          <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" onchange="syncEndDate()" /></div>
           <div class="form-row"><label>結束日期</label><input type="date" id="apply-end-date" /></div>
         </div>
         <div class="form-2col">
@@ -245,7 +245,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
             <label>結束時間</label>
             <select id="apply-end-time">
               <option value="12:40">12:40（中午）</option>
-              <option value="17:40">17:40（下班）</option>
+              <option value="17:40" selected>17:40（下班）</option>
             </select>
           </div>
         </div>
@@ -1198,6 +1198,15 @@ async function downloadAnnualExcel() {
   a.click();
 }
 
+function syncEndDate() {
+  var startVal = document.getElementById('apply-start-date').value;
+  var endEl = document.getElementById('apply-end-date');
+  if (startVal && (!endEl.value || endEl.value < startVal)) {
+    endEl.value = startVal;
+    calcDays && calcDays();
+  }
+}
+
 async function getNextDocNo() {
   const { data } = await sb.from('leave_requests')
     .select('doc_no')
@@ -1361,7 +1370,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v89 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v90 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
