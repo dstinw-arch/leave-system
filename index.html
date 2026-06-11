@@ -381,12 +381,17 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     </div>
 
     <!-- 人事：年假總覽 -->
-    <div id="hr-annual" class="page" style="display:none;flex-direction:column;height:calc(100vh - 56px);overflow:hidden;">
-      <div style="flex-shrink:0;padding:1rem 0 0;">
+    <div id="hr-annual" class="page" style="display:none;overflow-y:auto;height:calc(100vh - 56px);">
+      <div style="padding:1rem 1rem 0;position:sticky;top:0;background:var(--bg);z-index:10;padding-bottom:8px;">
         <div class="page-title" style="margin-bottom:.75rem;">年假總覽</div>
-        <button onclick="downloadAnnualExcel()" style="width:100%;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem;">⬇ 下載 Excel</button>
+        <div style="display:flex;gap:8px;margin-bottom:.5rem;">
+          <select id="annual-filter-unit" onchange="renderAnnualOverview()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;">
+            <option value="">所有單位</option>
+          </select>
+          <button onclick="downloadAnnualExcel()" style="padding:8px 14px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">⬇ 下載</button>
+        </div>
       </div>
-      <div id="annual-list" style="flex:1;overflow-y:auto;padding-bottom:80px;">載入中...</div>
+      <div id="annual-list" style="padding:0 1rem 80px;">載入中...</div>
     </div>
 
     <!-- 人事：人員管理 -->
@@ -1096,51 +1101,74 @@ async function approveAllLeaves(src) {
   alert('✅ 已處理 ' + pending.length + ' 筆假單');
 }
 
-const UNIT_ORDER = ['7','16','25','34','43','52','61','70','89','98','104','113','122','131','140','159','168'];
+const UNIT_ORDER = ['7','7-01','7-02','7-03','7-04','7-05','7-06','7-07','7-08','7-09','7-10','7-11','7-12','16','25','34','43','52','61','70','89','98','104','113','122','131','140','159','168'];
+
+var _annualEmps = [];
+var _annualUsedMap = {};
 
 async function loadAnnualOverview() {
   document.getElementById('annual-list').innerHTML = '載入中...';
-  // 撈所有員工
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
-  const emps = empRes.data || [];
-  // 撈所有已核准特休假單
+  _annualEmps = empRes.data || [];
   const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status').eq('status','approved').eq('leave_type','休假');
   const leaves = lrRes.data || [];
-  // 計算每人已用
-  var usedMap = {};
-  leaves.forEach(function(r){ usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
-  // 按 unit_id 排序
-  emps.sort(function(a,b){
+  _annualUsedMap = {};
+  leaves.forEach(function(r){ _annualUsedMap[r.emp_no] = (_annualUsedMap[r.emp_no]||0) + (r.days||0); });
+  _annualEmps.sort(function(a,b){
     var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
     if (ai === -1) ai = 99; if (bi === -1) bi = 99;
     if (ai !== bi) return ai - bi;
     return a.name.localeCompare(b.name, 'zh-TW');
   });
-  // 渲染
-  var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-    '<thead><tr style="background:var(--primary);color:#fff;">' +
-    '<th style="padding:8px 6px;text-align:left;">單位</th>' +
-    '<th style="padding:8px 6px;text-align:left;">姓名</th>' +
-    '<th style="padding:8px 6px;text-align:center;">應休</th>' +
-    '<th style="padding:8px 6px;text-align:center;">已休</th>' +
-    '<th style="padding:8px 6px;text-align:center;">剩餘</th>' +
-    '</tr></thead><tbody>';
-  emps.forEach(function(e, i) {
-    var used = usedMap[e.emp_no] || 0;
-    var total = e.annual_leave_days || 0;
-    var remain = total - used;
-    var bg = i % 2 === 0 ? '' : 'background:#f8faf8;';
-    var remainColor = remain < 0 ? 'color:#e74c3c;font-weight:600;' : remain <= 3 ? 'color:#e67e22;' : '';
-    html += '<tr style="' + bg + '">' +
-      '<td style="padding:7px 6px;">' + (e.unit_name||'') + '</td>' +
-      '<td style="padding:7px 6px;">' + e.name + '</td>' +
-      '<td style="padding:7px 6px;text-align:center;">' + total + '</td>' +
-      '<td style="padding:7px 6px;text-align:center;">' + used + '</td>' +
-      '<td style="padding:7px 6px;text-align:center;' + remainColor + '">' + remain + '</td>' +
-      '</tr>';
+  // 填單位下拉
+  var units = [];
+  _annualEmps.forEach(function(e){ if (e.unit_name && !units.includes(e.unit_name)) units.push(e.unit_name); });
+  var sel = document.getElementById('annual-filter-unit');
+  sel.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
+  renderAnnualOverview();
+}
+
+function renderAnnualOverview() {
+  var filterUnit = document.getElementById('annual-filter-unit').value;
+  var emps = filterUnit ? _annualEmps.filter(function(e){ return e.unit_name === filterUnit; }) : _annualEmps;
+
+  // 按單位分組
+  var groups = {};
+  var groupOrder = [];
+  emps.forEach(function(e) {
+    var key = e.unit_name || '其他';
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(e);
   });
-  html += '</tbody></table>';
-  document.getElementById('annual-list').innerHTML = html;
+
+  var html = '';
+  groupOrder.forEach(function(unitName) {
+    var members = groups[unitName];
+    html += '<div style="margin-bottom:0.6rem;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.07);overflow:hidden;">';
+    html += '<div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:14px;">'+unitName+'</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+    html += '<thead><tr style="background:#f0f4f0;">' +
+      '<th style="padding:6px 10px;text-align:left;color:var(--muted);font-size:14px;width:25%;">姓名</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--muted);font-size:14px;width:25%;">應休</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--muted);font-size:14px;width:25%;">已休</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--muted);font-size:14px;width:25%;">剩餘</th>' +
+      '</tr></thead><tbody>';
+    members.forEach(function(e, i) {
+      var used = _annualUsedMap[e.emp_no] || 0;
+      var total = e.annual_leave_days || 0;
+      var remain = total - used;
+      var bg = i % 2 === 0 ? '' : 'background:#f8faf8;';
+      var remainColor = remain < 0 ? 'color:#e74c3c;font-weight:700;' : remain <= 3 ? 'color:#e67e22;font-weight:600;' : 'color:var(--primary);font-weight:600;';
+      html += '<tr style="'+bg+'">' +
+        '<td style="padding:7px 10px;font-size:14px;">'+e.name+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;font-size:14px;">'+total+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;font-size:14px;">'+used+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;font-size:14px;'+remainColor+'">'+remain+'</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  document.getElementById('annual-list').innerHTML = html || '<div class="empty-hint">沒有資料</div>';
 }
 
 async function downloadAnnualExcel() {
@@ -1333,7 +1361,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v84 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v89 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
