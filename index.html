@@ -380,6 +380,15 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       <div id="hr-leave-list" style="flex:1;overflow-y:auto;padding-bottom:5rem;"></div>
     </div>
 
+    <!-- 人事：年假總覽 -->
+    <div id="hr-annual" class="page" style="display:none;flex-direction:column;height:calc(100vh - 56px);overflow:hidden;">
+      <div style="flex-shrink:0;padding:1rem 0 0;">
+        <div class="page-title" style="margin-bottom:.75rem;">年假總覽</div>
+        <button onclick="downloadAnnualExcel()" style="width:100%;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem;">⬇ 下載 Excel</button>
+      </div>
+      <div id="annual-list" style="flex:1;overflow-y:auto;padding-bottom:80px;">載入中...</div>
+    </div>
+
     <!-- 人事：人員管理 -->
     <div id="hr-mgmt" class="page" style="display:none;flex-direction:column;height:calc(100vh - 56px);overflow:hidden;">
       <div style="flex-shrink:0;padding:1rem 0 0;">
@@ -580,7 +589,8 @@ function buildNav() {
   if (u.is_hr) {
     btns += `
     <button class="bnav" id="bnav-hr-all" onclick="showPage('hr-all',this);loadHrAll()"><span class="bnav-icon">👥</span>全員假單</button>
-    <button class="bnav" id="bnav-hr-mgmt" onclick="showPage('hr-mgmt',this);loadHrMgmt()"><span class="bnav-icon">🔧</span>人員管理</button>`;
+    <button class="bnav" id="bnav-hr-mgmt" onclick="showPage('hr-mgmt',this);loadHrMgmt()"><span class="bnav-icon">🔧</span>人員管理</button>
+    <button class="bnav" id="bnav-hr-annual" onclick="showPage('hr-annual',this);loadAnnualOverview()"><span class="bnav-icon">📊</span>年假總覽</button>`;
   }
   btns += `
     <button class="bnav" id="bnav-page-settings" onclick="showPage('page-settings',this)"><span class="bnav-icon">⚙️</span>設定</button>`;
@@ -1086,6 +1096,80 @@ async function approveAllLeaves(src) {
   alert('✅ 已處理 ' + pending.length + ' 筆假單');
 }
 
+const UNIT_ORDER = ['7','16','25','34','43','52','61','70','89','98','104','113','122','131','140','159','168'];
+
+async function loadAnnualOverview() {
+  document.getElementById('annual-list').innerHTML = '載入中...';
+  // 撈所有員工
+  const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
+  const emps = empRes.data || [];
+  // 撈所有已核准特休假單
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status').eq('status','approved').eq('leave_type','休假');
+  const leaves = lrRes.data || [];
+  // 計算每人已用
+  var usedMap = {};
+  leaves.forEach(function(r){ usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
+  // 按 unit_id 排序
+  emps.sort(function(a,b){
+    var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
+    if (ai === -1) ai = 99; if (bi === -1) bi = 99;
+    if (ai !== bi) return ai - bi;
+    return a.name.localeCompare(b.name, 'zh-TW');
+  });
+  // 渲染
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+    '<thead><tr style="background:var(--primary);color:#fff;">' +
+    '<th style="padding:8px 6px;text-align:left;">單位</th>' +
+    '<th style="padding:8px 6px;text-align:left;">姓名</th>' +
+    '<th style="padding:8px 6px;text-align:center;">應休</th>' +
+    '<th style="padding:8px 6px;text-align:center;">已休</th>' +
+    '<th style="padding:8px 6px;text-align:center;">剩餘</th>' +
+    '</tr></thead><tbody>';
+  emps.forEach(function(e, i) {
+    var used = usedMap[e.emp_no] || 0;
+    var total = e.annual_leave_days || 0;
+    var remain = total - used;
+    var bg = i % 2 === 0 ? '' : 'background:#f8faf8;';
+    var remainColor = remain < 0 ? 'color:#e74c3c;font-weight:600;' : remain <= 3 ? 'color:#e67e22;' : '';
+    html += '<tr style="' + bg + '">' +
+      '<td style="padding:7px 6px;">' + (e.unit_name||'') + '</td>' +
+      '<td style="padding:7px 6px;">' + e.name + '</td>' +
+      '<td style="padding:7px 6px;text-align:center;">' + total + '</td>' +
+      '<td style="padding:7px 6px;text-align:center;">' + used + '</td>' +
+      '<td style="padding:7px 6px;text-align:center;' + remainColor + '">' + remain + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('annual-list').innerHTML = html;
+}
+
+async function downloadAnnualExcel() {
+  const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
+  const emps = empRes.data || [];
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status').eq('status','approved').eq('leave_type','休假');
+  const leaves = lrRes.data || [];
+  var usedMap = {};
+  leaves.forEach(function(r){ usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
+  emps.sort(function(a,b){
+    var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
+    if (ai === -1) ai = 99; if (bi === -1) bi = 99;
+    if (ai !== bi) return ai - bi;
+    return a.name.localeCompare(b.name, 'zh-TW');
+  });
+  var rows = [['單位','姓名','應休天數','已休天數','剩餘天數']];
+  emps.forEach(function(e) {
+    var used = usedMap[e.emp_no] || 0;
+    var total = e.annual_leave_days || 0;
+    rows.push([e.unit_name, e.name, total, used, total - used]);
+  });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '年假總覽_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
 async function getNextDocNo() {
   const { data } = await sb.from('leave_requests')
     .select('doc_no')
@@ -1249,7 +1333,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v83 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v84 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
