@@ -984,7 +984,7 @@ var empCache = {}; // emp_no -> {title, duty}
 var empProxyCache = {}; // name -> {emp_no, unit_name, title}
 
 async function loadHrAll() {
-  var result = await sb.from('leave_requests').select('*').order('doc_no',{ascending:false, nullsFirst:false});
+  var result = await sb.from('leave_requests').select('*').order('created_at',{ascending:false});
   allHrLeaves = result.data || [];
   // 載入員工資料快取（補 F、G、Q、R、S 欄用）
   var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty');
@@ -1019,6 +1019,7 @@ function filterHrLeaves() {
   var filtered = allHrLeaves;
   if (unit) filtered = filtered.filter(function(r){ return r.unit_name === unit; });
   if (emp) filtered = filtered.filter(function(r){ return r.emp_name === emp; });
+  filtered = filtered.slice().sort(function(a,b){ return (parseInt(b.doc_no)||0)-(parseInt(a.doc_no)||0); });
   if (status === 'unconfirmed') {
     filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
   } else if (status) {
@@ -1232,7 +1233,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v81 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v82 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
