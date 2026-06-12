@@ -108,7 +108,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .cal-nav { background:none; border:1.5px solid var(--border); border-radius:6px; padding:4px 10px; cursor:pointer; font-size:14px; color:var(--primary); }
 .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
 .cal-day-header { font-size:10px; color:var(--muted); text-align:center; padding:4px 0; font-weight:500; }
-.cal-day { min-height:36px; border-radius:6px; padding:3px; text-align:center; cursor:default; }
+.cal-day { height:48px; border-radius:6px; padding:3px 1px; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; }
 .cal-day-num { font-size:11px; font-weight:500; }
 .cal-day.today { background:#e4f0e8; }
 .cal-day.today .cal-day-num { color:var(--primary); font-weight:700; }
@@ -117,7 +117,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .cal-day.has-leave.has-pending { background:linear-gradient(135deg,#fff3cd 50%,#fce8e8 50%); cursor:pointer; }
 .cal-day.is-proxy { background:#dce8ff; cursor:pointer; }
 .cal-day.has-leave.is-proxy { background: linear-gradient(135deg, #fff3cd 50%, #dce8ff 50%); cursor:pointer; }
-.cal-dot { width:5px; height:5px; border-radius:50%; background:var(--warning); margin:1px auto 0; }
+.cal-dot { width:5px; height:5px; border-radius:50%; background:var(--warning); margin:1px 1px 0; flex-shrink:0; }
 .cal-dot-proxy { width:5px; height:5px; border-radius:50%; background:#f39c12; margin:1px auto 0; }
 .cal-day.other-month { opacity:.3; }
 .cal-day.is-holiday { background:#fdedeb; }
@@ -1433,7 +1433,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v91 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v92 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
