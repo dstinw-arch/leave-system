@@ -120,6 +120,9 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .cal-dot { width:5px; height:5px; border-radius:50%; background:var(--warning); margin:1px auto 0; }
 .cal-dot-proxy { width:5px; height:5px; border-radius:50%; background:#f39c12; margin:1px auto 0; }
 .cal-day.other-month { opacity:.3; }
+.cal-day.is-holiday { background:#fdedeb; }
+.cal-day.is-holiday .cal-day-num { color:#c0392b; font-weight:600; }
+.cal-holiday-name { display:block; font-size:8px; color:#c0392b; line-height:1.15; }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; display:none; align-items:center; justify-content:center; padding:1rem; }
 .modal-overlay.show { display:flex; }
@@ -231,19 +234,19 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div class="form-2col">
           <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" onchange="syncEndDate()" /></div>
-          <div class="form-row"><label>結束日期</label><input type="date" id="apply-end-date" /></div>
+          <div class="form-row"><label>結束日期</label><input type="date" id="apply-end-date" onchange="calcDays()" /></div>
         </div>
         <div class="form-2col">
           <div class="form-row">
             <label>開始時間</label>
-            <select id="apply-start-time">
+            <select id="apply-start-time" onchange="calcDays()">
               <option value="08:40">08:40（上午）</option>
               <option value="12:50">12:50（下午）</option>
             </select>
           </div>
           <div class="form-row">
             <label>結束時間</label>
-            <select id="apply-end-time">
+            <select id="apply-end-time" onchange="calcDays()">
               <option value="12:40">12:40（中午）</option>
               <option value="17:40" selected>17:40（下班）</option>
             </select>
@@ -334,6 +337,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         <span><span style="display:inline-block;width:10px;height:10px;background:#4a7fcb;border-radius:50%;margin-right:4px;"></span>其他</span>
         <span><span style="display:inline-block;width:10px;height:10px;background:#f39c12;border-radius:50%;margin-right:4px;"></span>代理</span>
         <span><span style="display:inline-block;width:10px;height:10px;border:1.5px solid #c0392b;border-radius:50%;margin-right:4px;"></span>待審核</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#fdedeb;border:1px solid #c0392b;border-radius:3px;margin-right:4px;"></span>國定假日</span>
       </div>
       <div id="cal-detail"><div class="empty-hint">點選有標記的日期查看詳情</div></div>
     </div>
@@ -1198,6 +1202,65 @@ async function downloadAnnualExcel() {
   a.click();
 }
 
+const HOLIDAYS = {
+  // 民國115年(2026)
+  '2026-01-01':'元旦','2026-02-16':'除夕','2026-02-17':'春節','2026-02-18':'春節(初二)','2026-02-19':'春節(初三)','2026-02-20':'春節補假',
+  '2026-02-27':'228補假','2026-04-03':'兒童節補假','2026-04-06':'清明節補假','2026-05-01':'勞動節','2026-06-19':'端午節',
+  '2026-09-25':'中秋節','2026-09-28':'教師節','2026-10-09':'國慶日補假','2026-10-26':'光復節補假','2026-12-25':'行憲紀念日',
+  // 民國116年(2027)
+  '2027-01-01':'元旦','2027-02-04':'小年夜','2027-02-05':'除夕','2027-02-08':'春節(初三)','2027-02-09':'春節補假','2027-02-10':'春節補假',
+  '2027-03-01':'228補假','2027-04-05':'清明節','2027-04-06':'兒童節補假','2027-04-30':'勞動節補假','2027-06-09':'端午節',
+  '2027-09-15':'中秋節','2027-09-28':'教師節','2027-10-11':'國慶日補假','2027-10-25':'光復節','2027-12-24':'行憲紀念日補假','2027-12-31':'元旦補假'
+};
+
+function fmtDateYMD(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function isWorkday(input) {
+  var d = typeof input === 'string' ? new Date(input + 'T00:00:00') : input;
+  var wd = d.getDay();
+  if (wd === 0 || wd === 6) return false;
+  return !HOLIDAYS[fmtDateYMD(d)];
+}
+
+function holidayLabel(ds) {
+  if (HOLIDAYS[ds]) return HOLIDAYS[ds];
+  var wd = new Date(ds + 'T00:00:00').getDay();
+  if (wd === 0) return '星期日';
+  if (wd === 6) return '星期六';
+  return null;
+}
+
+function calcDays() {
+  var s = document.getElementById('apply-start-date').value;
+  var e = document.getElementById('apply-end-date').value;
+  if (!s || !e) return;
+  var checks = [['開始日期', s], ['結束日期', e]];
+  for (var i = 0; i < checks.length; i++) {
+    var lbl = holidayLabel(checks[i][1]);
+    if (lbl) {
+      alert(checks[i][0] + ' ' + checks[i][1].replace(/-/g,'/') + ' 是「' + lbl + '」，當天本來就放假，請改選工作日');
+      document.getElementById('apply-days').value = '';
+      return;
+    }
+  }
+  var start = new Date(s + 'T00:00:00');
+  var end = new Date(e + 'T00:00:00');
+  if (end < start) return;
+  var workdays = [];
+  for (var d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+    if (isWorkday(d)) workdays.push(fmtDateYMD(d));
+  }
+  if (!workdays.length) { document.getElementById('apply-days').value = ''; return; }
+  var days = workdays.length;
+  var st = document.getElementById('apply-start-time').value || '08:40';
+  var et = document.getElementById('apply-end-time').value || '17:40';
+  if (parseInt(st.split(':')[0],10) >= 12 && workdays[0] === s) days -= 0.5;
+  if (parseInt(et.split(':')[0],10) <= 13 && workdays[workdays.length-1] === e) days -= 0.5;
+  document.getElementById('apply-days').value = Math.max(days, 0);
+}
+
 function syncEndDate() {
   var startVal = document.getElementById('apply-start-date').value;
   var endEl = document.getElementById('apply-end-date');
@@ -1370,7 +1433,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v90 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v91 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1397,23 +1460,29 @@ function renderCalendar() {
     var myLeaves = allUnitLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
     var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
     var isToday = today.getFullYear()===calYear&&today.getMonth()===calMonth&&today.getDate()===d;
-    var hasApproved = myLeaves.some(function(r){ return r.status==='approved'; });
-    var hasPending = myLeaves.some(function(r){ return r.status==='pending'; });
-    var hasProxy = myProxies.length>0;
+    var workday = isWorkday(ds);
+    var hName = HOLIDAYS[ds];
+    var hasApproved = workday && myLeaves.some(function(r){ return r.status==='approved'; });
+    var hasPending = workday && myLeaves.some(function(r){ return r.status==='pending'; });
+    var hasProxy = workday && myProxies.length>0;
     var dayCls = isToday?'today':'';
+    if (hName) dayCls += ' is-holiday';
     if (hasApproved && hasPending) dayCls += ' has-leave has-pending';
     else if (hasApproved) dayCls += ' has-leave';
     else if (hasPending) dayCls += ' has-pending';
     if (hasProxy) dayCls += ' is-proxy';
     var dots = '';
-    myLeaves.forEach(function(r){
-      var dotColor = r.status==='pending' ? '#e74c3c' : getLeaveColor(r.leave_type);
-      var dotStyle = r.status==='pending' ? 'border:1.5px solid '+getLeaveColor(r.leave_type)+';background:transparent;' : 'background:'+dotColor+';';
-      dots += '<div class="cal-dot" style="'+dotStyle+'display:inline-block;"></div>';
-    });
-    if (hasProxy) dots += '<div class="cal-dot" style="background:#f39c12"></div>';
+    if (workday) {
+      myLeaves.forEach(function(r){
+        var dotColor = r.status==='pending' ? '#e74c3c' : getLeaveColor(r.leave_type);
+        var dotStyle = r.status==='pending' ? 'border:1.5px solid '+getLeaveColor(r.leave_type)+';background:transparent;' : 'background:'+dotColor+';';
+        dots += '<div class="cal-dot" style="'+dotStyle+'display:inline-block;"></div>';
+      });
+      if (hasProxy) dots += '<div class="cal-dot" style="background:#f39c12"></div>';
+    }
+    var hSpan = hName ? '<span class="cal-holiday-name">'+hName+'</span>' : '';
     html2+='<div class="cal-day '+dayCls+'" data-ds="'+ds+'" onclick="showCalDay(this.dataset.ds)">' +
-      '<div class="cal-day-num">'+d+'</div>'+dots+'</div>';
+      '<div class="cal-day-num">'+d+'</div>'+hSpan+dots+'</div>';
   }
   grid.innerHTML=html2;
   document.getElementById('cal-detail').innerHTML='<div class="empty-hint">點選有標記的日期查看詳情</div>';
