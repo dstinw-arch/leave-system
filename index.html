@@ -643,6 +643,20 @@ function showPage(id, btn) {
 // 直接對理事主席的人員：總經理蔡景偉 + 副總/總稽核邱煥宸
 const DIRECT_TO_CHAIRMAN = ['0891009']; // 直送理事主席的副總（總稽核邱煥宸）
 
+// 半天判斷：回傳 '上午' / '下午' / ''（整天）
+function halfPeriodLabel(days, startTime, endTime) {
+  if (((Number(days)||0) * 2) % 2 === 0) return '';      // 整數天，非半天
+  var sh = parseInt(String(startTime||'').split(':')[0], 10);
+  var eh = parseInt(String(endTime||'').split(':')[0], 10);
+  if (!isNaN(sh) && sh >= 12) return '下午';              // 下午才開始
+  if (!isNaN(eh) && eh <= 13) return '上午';              // 中午前就結束
+  return '';
+}
+function daysText(r) {
+  var p = halfPeriodLabel(r.days, r.start_time, r.end_time);
+  return r.days + ' 天' + (p ? '（' + p + '）' : '');
+}
+
 function getReviewerType(emp) {
   // 理事主席不需送審
   if (emp.emp_no === CHAIRMAN_EMP_NO) return 'chairman';
@@ -799,7 +813,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
       '<span class="leave-badge ' + (badgeMap[r.status]||'') + '">' + (statusMap[r.status]||r.status) + '</span>' +
     '</div>' +
     '<div class="leave-meta">' +
-      r.start_date + ' ～ ' + r.end_date + '（' + r.days + ' 天）<br>' +
+      r.start_date + ' ～ ' + r.end_date + '（' + daysText(r) + '）<br>' +
       '事由：' + (r.reason||'—') + '<br>' +
       '代理人：' + (r.proxy_name||'—') + (r.proxy_duty ? '（' + r.proxy_duty + '）' : '') +
       (r.status==='rejected' && r.reject_reason ? '<br>拒絕原因：' + r.reject_reason : '') +
@@ -923,9 +937,10 @@ async function doSubmitLeave() {
   const { error } = await sb.from('leave_requests').insert(insertData);
   if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
   // LINE 通知主管
+  var _p = halfPeriodLabel(days, startTime, endTime);
   var leaveMsg = '[請假通知] ' + emp.name + ' 申請 ' + type + subtype + '\n' +
     '期間：' + startDate + (days > 0.5 ? ' ~ ' + endDate : '') + '\n' +
-    '天數：' + days + ' 天\n' +
+    '天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '') + '\n' +
     '事由：' + reason;
   await notifyManager(emp, leaveMsg);
   alert('✅ 假單已送出，等待審核');
@@ -1118,7 +1133,7 @@ async function approveAllLeaves(src) {
         status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString()
       }).eq('id', r.id);
       await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅\n' +
-        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' + r.days + ' 天');
+        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' + daysText(r));
     }
   }
   if (src==='gm') loadGmReview();
@@ -1337,7 +1352,7 @@ async function approveLeave() {
     }).eq('id', r.id);
     var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      r.days + ' 天';
+      daysText(r);
     await notifyEmployee(r.emp_no, empMsg);
   }
   if (currentReviewSource==='gm') loadGmReview();
@@ -1455,7 +1470,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v93 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v94 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1555,7 +1570,7 @@ function showCalDay(ds) {
         : '';
       return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
-        '<div class="leave-meta">'+r.days+'天<br>代理人：'+(r.proxy_name||'—')+'</div>' +
+        '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name||'—')+'</div>' +
         reviewBtns + '</div>';
     }).join('');
   }
@@ -1565,7 +1580,7 @@ function showCalDay(ds) {
       var color = getLeaveColor(r.leave_type);
       return '<div class="leave-item approved" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+r.emp_name+' 請假</div><span class="leave-badge" style="background:#f39c12;color:#fff">代理中</span></div>' +
-        '<div class="leave-meta">'+r.leave_type+' — '+r.leave_subtype+'（'+r.days+'天）<br>擔任事務：'+(r.proxy_duty||'—')+'</div></div>';
+        '<div class="leave-meta">'+r.leave_type+' — '+r.leave_subtype+'（'+daysText(r)+'）<br>擔任事務：'+(r.proxy_duty||'—')+'</div></div>';
     }).join('');
   }
   detail.innerHTML = out;
@@ -1599,7 +1614,7 @@ async function calApprove(id) {
     }).eq('id', id);
     var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      r.days + ' 天';
+      daysText(r);
     await notifyEmployee(r.emp_no, empMsg);
   }
   await loadCalendar();
