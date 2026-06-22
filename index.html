@@ -893,6 +893,14 @@ function confirmLeave() {
     errEl.textContent='請填寫所有必要欄位（含代理人姓名與擔任事務）';
     errEl.style.display='block'; return;
   }
+  // 硬擋假日：起訖日不可為週末/國定假日，且區間至少要有一個工作日
+  var _sLbl = holidayLabel(startDate);
+  if (_sLbl) { errEl.textContent='開始日期 '+startDate.replace(/-/g,'/')+' 是「'+_sLbl+'」，當天放假不能請假'; errEl.style.display='block'; return; }
+  var _eLbl = holidayLabel(endDate);
+  if (_eLbl) { errEl.textContent='結束日期 '+endDate.replace(/-/g,'/')+' 是「'+_eLbl+'」，當天放假不能請假'; errEl.style.display='block'; return; }
+  var _wd = 0;
+  for (var _dt=new Date(startDate+'T00:00:00'); _dt<=new Date(endDate+'T00:00:00'); _dt.setDate(_dt.getDate()+1)) { if (isWorkday(_dt)) _wd++; }
+  if (_wd === 0) { errEl.textContent='所選日期都是假日，無需請假'; errEl.style.display='block'; return; }
   const timeLabel = days <= 0.5
     ? startDate + ' ' + startTime + '～' + endTime
     : startDate + ' ～ ' + endDate;
@@ -919,6 +927,10 @@ async function doSubmitLeave() {
   const proxyName = document.getElementById('apply-proxy-name').value.trim();
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
   const errEl = document.getElementById('apply-error');
+  // 二次防線：擋假日（避免繞過 confirmLeave）
+  if (holidayLabel(startDate) || holidayLabel(endDate)) {
+    errEl.textContent='起訖日不可為假日，請改選工作日'; errEl.style.display='block'; return;
+  }
   const reviewerType = getReviewerType(emp);
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
@@ -1470,7 +1482,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v94 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v95 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
