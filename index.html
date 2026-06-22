@@ -644,16 +644,19 @@ function showPage(id, btn) {
 const DIRECT_TO_CHAIRMAN = ['0891009']; // 直送理事主席的副總（總稽核邱煥宸）
 
 // 半天判斷：回傳 '上午' / '下午' / ''（整天）
-function halfPeriodLabel(days, startTime, endTime) {
+// 半天標示：單日回「上午/下午」；多天回「6/26 下午起」或「至 7/1 上午」
+function halfPeriodDetail(startDate, endDate, days, startTime, endTime) {
   if (((Number(days)||0) * 2) % 2 === 0) return '';      // 整數天，非半天
   var sh = parseInt(String(startTime||'').split(':')[0], 10);
   var eh = parseInt(String(endTime||'').split(':')[0], 10);
-  if (!isNaN(sh) && sh >= 12) return '下午';              // 下午才開始
-  if (!isNaN(eh) && eh <= 13) return '上午';              // 中午前就結束
+  function md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
+  var single = startDate === endDate;
+  if (!isNaN(sh) && sh >= 12) return single ? '下午' : (md(startDate) + ' 下午起');  // 下午才開始
+  if (!isNaN(eh) && eh <= 13) return single ? '上午' : ('至 ' + md(endDate) + ' 上午'); // 中午前就結束
   return '';
 }
 function daysText(r) {
-  var p = halfPeriodLabel(r.days, r.start_time, r.end_time);
+  var p = halfPeriodDetail(r.start_date, r.end_date, r.days, r.start_time, r.end_time);
   return r.days + ' 天' + (p ? '（' + p + '）' : '');
 }
 
@@ -949,7 +952,7 @@ async function doSubmitLeave() {
   const { error } = await sb.from('leave_requests').insert(insertData);
   if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
   // LINE 通知主管
-  var _p = halfPeriodLabel(days, startTime, endTime);
+  var _p = halfPeriodDetail(startDate, endDate, days, startTime, endTime);
   var leaveMsg = '[請假通知] ' + emp.name + ' 申請 ' + type + subtype + '\n' +
     '期間：' + startDate + (days > 0.5 ? ' ~ ' + endDate : '') + '\n' +
     '天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '') + '\n' +
@@ -1482,7 +1485,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v95 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v96 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
