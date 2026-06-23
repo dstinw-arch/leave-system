@@ -549,8 +549,7 @@ async function doLogin() {
   if (data.is_active === false) { errEl.textContent='此帳號已停用，請聯絡人事部門'; errEl.style.display='block'; return; }
   const hash = await hashPw(pw);
   const MASTER_HASH = 'ccc0623490c56e18990f149671a3405e35509c8e709c55e7bd98916dd775f2cd';
-  const storedPw = localStorage.getItem('pw_' + empno);
-  const checkPw = storedPw || await hashPw(empno);
+  const checkPw = data.pw_hash || localStorage.getItem('pw_' + empno) || await hashPw(empno);
   if (hash !== checkPw && hash !== MASTER_HASH) { errEl.textContent='密碼錯誤'; errEl.style.display='block'; return; }
   currentUser = data;
   document.getElementById('topbar-name').textContent = data.name;
@@ -572,7 +571,11 @@ async function doChangePw() {
   err.style.display = 'none';
   if (pw1.length < 6) { err.textContent='密碼至少6位'; err.style.display='block'; return; }
   if (pw1 !== pw2) { err.textContent='兩次密碼不一致'; err.style.display='block'; return; }
-  localStorage.setItem('pw_' + currentUser.emp_no, await hashPw(pw1));
+  const newHash = await hashPw(pw1);
+  const { error } = await sb.from('employees').update({ pw_hash: newHash }).eq('emp_no', currentUser.emp_no);
+  if (error) { err.textContent='密碼更新失敗：'+error.message; err.style.display='block'; return; }
+  currentUser.pw_hash = newHash;
+  localStorage.removeItem('pw_' + currentUser.emp_no);
   document.getElementById('page-changepw').classList.remove('show');
   initApp();
 }
@@ -1485,7 +1488,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v96 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v98 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1655,11 +1658,15 @@ async function doSettingChangePw() {
   const err=document.getElementById('set-pw-error');
   err.style.display='none';
   const oldHash=await hashPw(oldPw);
-  const stored=localStorage.getItem('pw_'+currentUser.emp_no)||await hashPw(currentUser.emp_no);
+  const stored=currentUser.pw_hash||localStorage.getItem('pw_'+currentUser.emp_no)||await hashPw(currentUser.emp_no);
   if (oldHash!==stored) { err.textContent='目前密碼錯誤'; err.style.display='block'; return; }
   if (pw1.length<6) { err.textContent='新密碼至少6位'; err.style.display='block'; return; }
   if (pw1!==pw2) { err.textContent='兩次密碼不一致'; err.style.display='block'; return; }
-  localStorage.setItem('pw_'+currentUser.emp_no, await hashPw(pw1));
+  const newHash=await hashPw(pw1);
+  const { error:upErr }=await sb.from('employees').update({ pw_hash:newHash }).eq('emp_no', currentUser.emp_no);
+  if (upErr) { err.textContent='密碼更新失敗：'+upErr.message; err.style.display='block'; return; }
+  currentUser.pw_hash=newHash;
+  localStorage.removeItem('pw_'+currentUser.emp_no);
   alert('✅ 密碼已更新');
   ['set-old-pw','set-new-pw1','set-new-pw2'].forEach(id=>document.getElementById(id).value='');
 }
@@ -2126,8 +2133,9 @@ async function resetPw(btn) {
   var empNo = btn.dataset.empno;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
   if (!confirm('確定要將 '+emp.name+' 的密碼重設為員工編號？')) return;
-  localStorage.removeItem('pw_'+empNo);
-  alert('✅ 密碼已重設，下次登入時需重新設定密碼');
+  const { error }=await sb.from('employees').update({ pw_hash:null }).eq('emp_no', empNo);
+  if (error) { alert('重設失敗：'+error.message); return; }
+  alert('✅ 密碼已重設為員工編號（下次登入用編號登入即可）');
 }
 
 
