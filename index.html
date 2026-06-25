@@ -645,6 +645,7 @@ function showPage(id, btn) {
 // 其他員工 → 所屬單位主管審核
 // 直接對理事主席的人員：總經理蔡景偉 + 副總/總稽核邱煥宸
 const DIRECT_TO_CHAIRMAN = ['0891009']; // 直送理事主席的副總（總稽核邱煥宸）
+const DIRECT_TO_GM = ['1001001']; // 直送總經理（法遵主管許庭豪）
 
 // 半天判斷：回傳 '上午' / '下午' / ''（整天）
 // 半天標示：單日回「上午/下午」；多天回「6/26 下午起」或「至 7/1 上午」
@@ -670,6 +671,8 @@ function getReviewerType(emp) {
   if (emp.emp_no === GM_EMP_NO) return 'chairman';
   // 總稽核邱煥宸 → 直接送理事主席
   if (DIRECT_TO_CHAIRMAN.includes(emp.emp_no)) return 'chairman';
+  // 法遵主管許庭豪 → 直接送總經理
+  if (DIRECT_TO_GM.includes(emp.emp_no)) return 'gm';
   // 其他副總（張君明、高稵婕）→ 送總經理審核
   if (emp.is_gm) return 'gm';
   // 分社正主管 → 總經理審核
@@ -1488,7 +1491,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v98 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v99 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
