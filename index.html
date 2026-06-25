@@ -774,7 +774,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   var namePrefix = '';
   if (isHr) namePrefix = '[' + r.unit_name + '] ' + r.emp_name + ' · ';
   else if (isGm || isMgr) namePrefix = r.emp_name + ' · ';
-  var canReview = (isMgr || isGm || isHr) && r.status === 'pending';
+  var canReview = (isMgr || isGm || isHr) && r.status === 'pending' && (!currentUser || r.emp_no !== currentUser.emp_no);
   var src = (isGm && currentUser && currentUser.emp_no === CHAIRMAN_EMP_NO) ? 'chairman' : isGm ? 'gm' : (isHr ? 'hr' : 'unit');
   var reviewBtn = canReview ? "<button class=\"btn-sm btn-approve\" onclick=\"openReview('" + r.id + "','" + src + "')\" >審核</button>" : '';
   var deleteBtn = (isHr && adminMode) ? "<button class=\"btn-sm\" style=\"background:#f8d7da;color:#842029;margin-left:.4rem;\" onclick=\"deleteLeave('" + r.id + "')\">🗑 刪除</button>" : '';
@@ -1490,7 +1490,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v100 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v102 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1567,16 +1567,18 @@ function showCalDay(ds) {
       var namePrefix = isMgrView ? r.emp_name+' · ' : '';
       // 判斷這張假單是否在當前使用者的審核權限範圍內
       var canReview = false;
-      if (isMgrView && !isMgmtStaff && r.status === 'pending') {
+      if (isMgrView && !isMgmtStaff && r.status === 'pending' && r.emp_no !== currentUser.emp_no) {
         if (currentUser.emp_no === CHAIRMAN_EMP_NO) {
           canReview = r.reviewer_type === 'chairman';
         } else if (currentUser.is_gm && DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no)) {
           // 直送理事主席的副總：只能審 reviewer_emp_no = 自己 的假單
           canReview = r.reviewer_emp_no === currentUser.emp_no && r.reviewer_type === 'mgmt';
+        } else if (currentUser.emp_no === GM_EMP_NO) {
+          // 總經理：只審 reviewer_type=gm
+          canReview = r.reviewer_type === 'gm';
         } else if (currentUser.is_gm) {
-          // 總經理：reviewer_type=gm；副總：reviewer_emp_no=自己 AND reviewer_type=mgmt
-          canReview = r.reviewer_type === 'gm' ||
-            (r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no);
+          // 副總：只審指派給自己的 mgmt 類型
+          canReview = r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no;
         } else if (currentUser.is_manager || currentUser.is_sub_manager) {
           canReview = (r.reviewer_type === 'unit' && r.unit_id === currentUser.unit_id) ||
                       (r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no);
