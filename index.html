@@ -1058,12 +1058,14 @@ async function loadChairmanReview() {
 // ── 人事：全員假單 ──
 var empCache = {}; // emp_no -> {title, duty}
 var empProxyCache = {}; // name -> {emp_no, unit_name, title}
+var allHrEmps = []; // 目前在職員工名單（用於人員篩選下拉選單，反映「現在」單位，而非假單快照上的單位）
 
 async function loadHrAll() {
   var result = await sb.from('leave_requests').select('*').order('created_at',{ascending:false});
   allHrLeaves = result.data || [];
   // 載入員工資料快取（補 F、G、Q、R、S 欄用）
-  var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty');
+  var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty,is_active');
+  allHrEmps = (empRes.data||[]).filter(function(e){ return e.is_active !== false; });
   (empRes.data||[]).forEach(function(e){
     empCache[e.emp_no] = {title: e.title||'', duty: e.duty||''};
     empProxyCache[e.name] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
@@ -1079,10 +1081,12 @@ function updateEmpFilter() {
   var unit = document.getElementById('hr-filter-unit').value;
   var empSel = document.getElementById('hr-filter-emp');
   var emps = [];
-  allHrLeaves.forEach(function(r) {
-    if ((!unit || r.unit_name === unit) && r.emp_name && emps.indexOf(r.emp_name) < 0) emps.push(r.emp_name);
+  // 改用「目前在職員工的現在單位」產生人員清單，而非掃描歷史假單快照，
+  // 避免調職後舊單位仍殘留該員工、新單位卻看不到人的問題
+  allHrEmps.forEach(function(e) {
+    if ((!unit || e.unit_name === unit) && e.name && emps.indexOf(e.name) < 0) emps.push(e.name);
   });
-  emps.sort();
+  emps.sort(function(a,b){ return a.localeCompare(b, 'zh-TW'); });
   empSel.innerHTML = '<option value="">所有人員</option>' + emps.map(function(e){ return '<option value="' + e + '">' + e + '</option>'; }).join('');
   filterHrLeaves();
 }
@@ -1490,7 +1494,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v102 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v104 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2211,9 +2215,28 @@ updateSubtype();
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/leave-system/sw.js')
-      .then(function(reg) { console.log('SW registered'); })
-      .catch(function(err) { console.log('SW failed:', err); });
+    navigator.serviceWorker.register('/leave-system/sw.js').then(function(reg) {
+      reg.update(); // 開啟時主動檢查新版
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') reg.update(); // 切回前景再檢查
+      });
+      reg.addEventListener('updatefound', function() {
+        var sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', function() {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage({ type: 'SKIP_WAITING' }); // 有新版就叫它立刻接管
+          }
+        });
+      });
+    }).catch(function(err) { console.log('SW failed:', err); });
+    // 新版接管後自動重整一次到最新
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   });
 }
 </script>
