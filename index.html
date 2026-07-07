@@ -406,6 +406,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       <div style="padding:1rem 1rem 0;position:sticky;top:0;background:var(--bg);z-index:10;padding-bottom:8px;">
         <div class="page-title" style="margin-bottom:.75rem;">年假總覽</div>
         <div style="display:flex;gap:8px;margin-bottom:.5rem;">
+          <select id="annual-filter-year" onchange="loadAnnualOverview()" style="width:90px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;"></select>
           <select id="annual-filter-unit" onchange="renderAnnualOverview()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;">
             <option value="">所有單位</option>
           </select>
@@ -743,9 +744,10 @@ async function loadEmpHome() {
   var emp = currentUser;
   var res = await sb.from('leave_requests').select('*').eq('emp_no', emp.emp_no).order('start_date',{ascending:false});
   myLeaveData = res.data || [];
-  // 即時從已核准假單加總已使用特休天數（不依賴 used_leave_days 欄位）
+  // 曆年制：只加總「今年」已核准的特休天數（以起始日年份認定），沒休完 12 月折算工資、不遞延
+  var thisYear = new Date().getFullYear();
   var usedDays = myLeaveData
-    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假'; })
+    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假' && new Date(r.start_date).getFullYear() === thisYear; })
     .reduce(function(sum, r){ return sum + (r.days||0); }, 0);
   var remain = (emp.annual_leave_days||0) - usedDays;
   document.getElementById('emp-remain').textContent = remain.toFixed(1);
@@ -1174,9 +1176,20 @@ var _annualUsedMap = {};
 
 async function loadAnnualOverview() {
   document.getElementById('annual-list').innerHTML = '載入中...';
+  var thisYear = new Date().getFullYear();
+  var yearSel = document.getElementById('annual-filter-year');
+  if (!yearSel.options.length) {
+    // 年度選單：近3年 + 今年 + 明年，方便年底跨年度核對
+    var years = [thisYear+1, thisYear, thisYear-1, thisYear-2, thisYear-3];
+    yearSel.innerHTML = years.map(function(y){ return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+y+' 年</option>'; }).join('');
+  }
+  var selectedYear = parseInt(yearSel.value, 10) || thisYear;
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
   _annualEmps = empRes.data || [];
-  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status').eq('status','approved').eq('leave_type','休假');
+  // 曆年制：只計算「選定年度」（1/1~12/31）已核准的特休，沒休完 12 月折算工資、不遞延到隔年
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status,start_date')
+    .eq('status','approved').eq('leave_type','休假')
+    .gte('start_date', selectedYear+'-01-01').lte('start_date', selectedYear+'-12-31');
   const leaves = lrRes.data || [];
   _annualUsedMap = {};
   leaves.forEach(function(r){ _annualUsedMap[r.emp_no] = (_annualUsedMap[r.emp_no]||0) + (r.days||0); });
@@ -1190,7 +1203,9 @@ async function loadAnnualOverview() {
   var units = [];
   _annualEmps.forEach(function(e){ if (e.unit_name && !units.includes(e.unit_name)) units.push(e.unit_name); });
   var sel = document.getElementById('annual-filter-unit');
+  var prevUnit = sel.value;
   sel.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
+  sel.value = prevUnit;
   renderAnnualOverview();
 }
 
@@ -1238,9 +1253,13 @@ function renderAnnualOverview() {
 }
 
 async function downloadAnnualExcel() {
+  var selectedYear = parseInt(document.getElementById('annual-filter-year').value, 10) || new Date().getFullYear();
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
   const emps = empRes.data || [];
-  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status').eq('status','approved').eq('leave_type','休假');
+  // 曆年制：只計算「選定年度」（1/1~12/31）已核准的特休，與畫面上的年假總覽算法一致
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status,start_date')
+    .eq('status','approved').eq('leave_type','休假')
+    .gte('start_date', selectedYear+'-01-01').lte('start_date', selectedYear+'-12-31');
   const leaves = lrRes.data || [];
   var usedMap = {};
   leaves.forEach(function(r){ usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
@@ -1250,7 +1269,7 @@ async function downloadAnnualExcel() {
     if (ai !== bi) return ai - bi;
     return a.name.localeCompare(b.name, 'zh-TW');
   });
-  var rows = [['單位','姓名','應休天數','已休天數','剩餘天數']];
+  var rows = [['單位','姓名','應休天數('+selectedYear+')','已休天數('+selectedYear+')','剩餘天數('+selectedYear+')']];
   emps.forEach(function(e) {
     var used = usedMap[e.emp_no] || 0;
     var total = e.annual_leave_days || 0;
@@ -1260,7 +1279,7 @@ async function downloadAnnualExcel() {
   var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '年假總覽_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = '年假總覽_' + selectedYear + '_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
 }
 
@@ -1495,7 +1514,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v105 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v107 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
