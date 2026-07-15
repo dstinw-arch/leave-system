@@ -728,7 +728,7 @@ async function notifyEmployee(empNo, message) {
   }
 }
 
-// 核准後通知代理人
+// 假單送出時通知代理人
 async function notifyProxy(r) {
   var pno = String(r.proxy_emp_no || '').trim();
   if (!pno || pno === r.emp_no) return;
@@ -736,7 +736,7 @@ async function notifyProxy(r) {
   var period = (r.start_date === r.end_date) ? md(r.start_date) : (md(r.start_date) + '～' + md(r.end_date));
   var msg = '[代理通知] ' + r.emp_name + ' ' + period + ' 請' +
     (r.leave_subtype || r.leave_type || '假') + ' ' + daysText(r) +
-    '，指定你為代理人（已核准）';
+    '，指定你為代理人（待審核）';
   await notifyEmployee(pno, msg);
 }
 
@@ -977,6 +977,7 @@ async function doSubmitLeave() {
     '天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '') + '\n' +
     '事由：' + reason;
   await notifyManager(emp, leaveMsg);
+  await notifyProxy(insertData);
   alert('✅ 假單已送出，等待審核');
   ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty'].forEach(id=>document.getElementById(id).value='');
   proxyData = {};
@@ -1173,7 +1174,6 @@ async function approveAllLeaves(src) {
       }).eq('id', r.id);
       await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅\n' +
         r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' + daysText(r));
-      await notifyProxy(r);
     }
   }
   if (src==='gm') loadGmReview();
@@ -1411,7 +1411,6 @@ async function approveLeave() {
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
       daysText(r);
     await notifyEmployee(r.emp_no, empMsg);
-    await notifyProxy(r);
   }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
@@ -1528,7 +1527,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v108 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v109 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1676,7 +1675,6 @@ async function calApprove(id) {
       r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
       daysText(r);
     await notifyEmployee(r.emp_no, empMsg);
-    await notifyProxy(r);
   }
   await loadCalendar();
 }
