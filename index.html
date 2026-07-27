@@ -954,14 +954,28 @@ async function doSubmitLeave() {
     errEl.textContent='起訖日不可為假日，請改選工作日'; errEl.style.display='block'; return;
   }
   const reviewerType = getReviewerType(emp);
+  // 代理人防呆：有填名字但沒點選建議（proxyData 為空）→ 用「姓名精準 + 在職」反查補員編，
+  // 確保 proxy_emp_no 一定帶得到，代理人 LINE 通知才發得出去。在職員工無同名，最多對到一位。
+  let resolvedProxyEmpNo = proxyData.emp_no || null;
+  let resolvedProxyUnit  = proxyData.unit_name || null;
+  let resolvedProxyTitle = proxyData.title || null;
+  if (proxyName && !resolvedProxyEmpNo) {
+    const pr = await sb.from('employees').select('emp_no,unit_name,title')
+      .eq('name', proxyName).eq('is_active', true).neq('emp_no', emp.emp_no).limit(2);
+    if (pr.data && pr.data.length === 1) {
+      resolvedProxyEmpNo = pr.data[0].emp_no;
+      resolvedProxyUnit  = resolvedProxyUnit  || pr.data[0].unit_name;
+      resolvedProxyTitle = resolvedProxyTitle || pr.data[0].title;
+    }
+  }
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
     leave_type:type, leave_subtype:subtype, start_date:startDate, end_date:endDate,
     start_time:startTime, end_time:endTime, days, reason,
     proxy_name:proxyName, proxy_duty:proxyDuty,
-    proxy_emp_no:proxyData.emp_no||null,
-    proxy_unit:proxyData.unit_name||null,
-    proxy_title:proxyData.title||null,
+    proxy_emp_no:resolvedProxyEmpNo,
+    proxy_unit:resolvedProxyUnit,
+    proxy_title:resolvedProxyTitle,
     status:'pending', reviewer_type:reviewerType
   };
   // 管理部假單：附上直屬長官員工編號
@@ -1527,7 +1541,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v109 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v110 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
