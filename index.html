@@ -517,7 +517,7 @@ const CHAIRMAN_EMP_NO = '0871004';
 const GM_EMP_NO = '0881032'; // 總經理蔡景偉
 
 const LEAVE_TYPES = {
-  '休假': ['特別休假','防疫隔離假','防疫照顧假','疫苗接種假'],
+  '休假': ['特別休假','原住民族歲時祭儀假','防疫隔離假','防疫照顧假','疫苗接種假'],
   '病假': ['普通傷病假','疫苗接種假','生理假'],
   '事假': ['普通事假','防疫隔離假','防疫照顧假','家庭照顧假'],
   '其他假': ['婚假','喪假','產假','產檢假','陪產檢及陪產假','公假','公傷病假_普通傷病假','公傷病假_因公確診','出差']
@@ -759,7 +759,7 @@ async function loadEmpHome() {
   // 曆年制：只加總「今年」已核准的特休天數（以起始日年份認定），沒休完 12 月折算工資、不遞延
   var thisYear = new Date().getFullYear();
   var usedDays = myLeaveData
-    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假' && new Date(r.start_date).getFullYear() === thisYear; })
+    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假' && r.leave_subtype !== '原住民族歲時祭儀假' && new Date(r.start_date).getFullYear() === thisYear; })
     .reduce(function(sum, r){ return sum + (r.days||0); }, 0);
   var remain = (emp.annual_leave_days||0) - usedDays;
   document.getElementById('emp-remain').textContent = remain.toFixed(1);
@@ -898,7 +898,7 @@ function updateSubtype() {
   sub.innerHTML = LEAVE_TYPES[type].map(s=>`<option value="${s}">${s}</option>`).join('');
 }
 
-function confirmLeave() {
+async function confirmLeave() {
   const errEl = document.getElementById('apply-error');
   errEl.style.display = 'none';
   const type = document.getElementById('apply-type').value;
@@ -923,6 +923,20 @@ function confirmLeave() {
   var _wd = 0;
   for (var _dt=new Date(startDate+'T00:00:00'); _dt<=new Date(endDate+'T00:00:00'); _dt.setDate(_dt.getDate()+1)) { if (isWorkday(_dt)) _wd++; }
   if (_wd === 0) { errEl.textContent='所選日期都是假日，無需請假'; errEl.style.display='block'; return; }
+  // 代理人驗證：姓名必須對到「在職」同事，否則擋下不讓送出（已點選建議則 proxyData.emp_no 已有值，不重查）
+  if (!proxyData.emp_no) {
+    const _pr = await sb.from('employees').select('emp_no,unit_name,title')
+      .eq('name', proxyName).eq('is_active', true).neq('emp_no', currentUser.emp_no).limit(2);
+    if (!_pr.data || _pr.data.length === 0) {
+      errEl.textContent='查無代理人「'+proxyName+'」，請確認姓名是否正確，或從下方建議清單點選';
+      errEl.style.display='block'; return;
+    }
+    if (_pr.data.length > 1) {
+      errEl.textContent='代理人「'+proxyName+'」有多位同名，請從下方建議清單點選正確的人';
+      errEl.style.display='block'; return;
+    }
+    proxyData = { emp_no: _pr.data[0].emp_no, unit_name: _pr.data[0].unit_name, title: _pr.data[0].title };
+  }
   const timeLabel = days <= 0.5
     ? startDate + ' ' + startTime + '～' + endTime
     : startDate + ' ～ ' + endDate;
@@ -967,6 +981,11 @@ async function doSubmitLeave() {
       resolvedProxyUnit  = resolvedProxyUnit  || pr.data[0].unit_name;
       resolvedProxyTitle = resolvedProxyTitle || pr.data[0].title;
     }
+  }
+  // 硬防線：代理人一定要對到在職同事才允許送出（防繞過 confirmLeave）
+  if (!resolvedProxyEmpNo) {
+    errEl.textContent='查無代理人「'+proxyName+'」，請確認姓名是否正確，或從建議清單點選';
+    errEl.style.display='block'; return;
   }
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
@@ -1089,9 +1108,28 @@ var empCache = {}; // emp_no -> {title, duty}
 var empProxyCache = {}; // name -> {emp_no, unit_name, title}
 var allHrEmps = []; // 目前在職員工名單（用於人員篩選下拉選單，反映「現在」單位，而非假單快照上的單位）
 
+// ── 分頁抓取全部列（突破 Supabase 單次 1000 列上限）──
+// 以唯一的 id 排序來分頁，避免 created_at 重複導致的跨頁漏/重複
+async function fetchAllRows(table, columns, applyFilters) {
+  var all = [], from = 0, size = 1000;
+  while (true) {
+    var q = sb.from(table).select(columns);
+    if (applyFilters) q = applyFilters(q);
+    q = q.order('id', { ascending: true });
+    var res = await q.range(from, from + size - 1);
+    if (res.error) { console.error('fetchAllRows', table, res.error); break; }
+    var chunk = res.data || [];
+    all = all.concat(chunk);
+    if (chunk.length < size) break;
+    from += size;
+  }
+  return all;
+}
+
 async function loadHrAll() {
-  var result = await sb.from('leave_requests').select('*').order('created_at',{ascending:false});
-  allHrLeaves = result.data || [];
+  var _all = await fetchAllRows('leave_requests', '*', null);
+  _all.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+  allHrLeaves = _all;
   // 載入員工資料快取（補 F、G、Q、R、S 欄用）
   var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty,is_active');
   allHrEmps = (empRes.data||[]).filter(function(e){ return e.is_active !== false; });
@@ -1214,12 +1252,12 @@ async function loadAnnualOverview() {
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
   _annualEmps = empRes.data || [];
   // 曆年制：只計算「選定年度」（1/1~12/31）已核准的特休，沒休完 12 月折算工資、不遞延到隔年
-  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status,start_date')
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,leave_subtype,status,start_date')
     .eq('status','approved').eq('leave_type','休假')
     .gte('start_date', selectedYear+'-01-01').lte('start_date', selectedYear+'-12-31');
   const leaves = lrRes.data || [];
   _annualUsedMap = {};
-  leaves.forEach(function(r){ _annualUsedMap[r.emp_no] = (_annualUsedMap[r.emp_no]||0) + (r.days||0); });
+  leaves.forEach(function(r){ if (r.leave_subtype === '原住民族歲時祭儀假') return; _annualUsedMap[r.emp_no] = (_annualUsedMap[r.emp_no]||0) + (r.days||0); });
   _annualEmps.sort(function(a,b){
     var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
     if (ai === -1) ai = 99; if (bi === -1) bi = 99;
@@ -1284,12 +1322,12 @@ async function downloadAnnualExcel() {
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
   const emps = empRes.data || [];
   // 曆年制：只計算「選定年度」（1/1~12/31）已核准的特休，與畫面上的年假總覽算法一致
-  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,status,start_date')
+  const lrRes = await sb.from('leave_requests').select('emp_no,days,leave_type,leave_subtype,status,start_date')
     .eq('status','approved').eq('leave_type','休假')
     .gte('start_date', selectedYear+'-01-01').lte('start_date', selectedYear+'-12-31');
   const leaves = lrRes.data || [];
   var usedMap = {};
-  leaves.forEach(function(r){ usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
+  leaves.forEach(function(r){ if (r.leave_subtype === '原住民族歲時祭儀假') return; usedMap[r.emp_no] = (usedMap[r.emp_no]||0) + (r.days||0); });
   emps.sort(function(a,b){
     var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
     if (ai === -1) ai = 99; if (bi === -1) bi = 99;
@@ -1541,7 +1579,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v110 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v115 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
