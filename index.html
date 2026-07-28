@@ -216,13 +216,6 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       </div>
       <div class="section-title" style="margin-top:.25rem;">我的假單紀錄</div>
       <div style="display:flex;gap:.5rem;margin-bottom:.6rem;">
-        <select id="emp-filter-type" onchange="filterEmpLeaves()" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:#fff;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22%3E%3Cpath d=%22M0 0l5 6 5-6z%22 fill=%22%235a7a65%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;">
-          <option value="">所有假別</option>
-          <option value="休假">🔴 休假</option>
-          <option value="病假">🟡 病假</option>
-          <option value="事假">🔵 事假</option>
-          <option value="其他假">🔵 其他假</option>
-        </select>
         <select id="emp-filter-status" onchange="filterEmpLeaves()" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:#fff;-webkit-appearance:none;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22%3E%3Cpath d=%22M0 0l5 6 5-6z%22 fill=%22%235a7a65%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;">
           <option value="">所有狀態</option>
           <option value="pending">待審核</option>
@@ -768,10 +761,8 @@ async function loadEmpHome() {
 }
 
 function filterEmpLeaves() {
-  var type = document.getElementById('emp-filter-type') ? document.getElementById('emp-filter-type').value : '';
   var status = document.getElementById('emp-filter-status') ? document.getElementById('emp-filter-status').value : '';
   var filtered = myLeaveData;
-  if (type) filtered = filtered.filter(function(r){ return r.leave_type === type; });
   if (status === 'unconfirmed') {
     filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
   } else if (status) {
@@ -779,7 +770,64 @@ function filterEmpLeaves() {
   }
   var list = document.getElementById('emp-leave-list');
   if (!filtered.length) { list.innerHTML='<div class="empty-hint">沒有符合的假單</div>'; return; }
-  list.innerHTML = filtered.map(function(r){ return leaveItemHtml(r,false,false,false); }).join('');
+
+  // 分組：休假 / 病假 / 事假 依大類；「其他假」依細項(假別)各自成區。組內維持由新到舊
+  var MAJOR_ORDER = ['休假','病假','事假'];
+  var OTHER_SUB_ORDER = ['婚假','喪假','產假','產檢假','陪產檢及陪產假','公假','公傷病假_普通傷病假','公傷病假_因公確診','出差'];
+  var groups = {};   // key -> { label, color, items }
+  var order = [];    // 顯示順序（key）
+  filtered.forEach(function(r){
+    var key, label, color;
+    if (r.leave_type === '其他假') {
+      var sub = r.leave_subtype || '其他';
+      key = 'OTHER:' + sub; label = sub; color = getLeaveColor('其他假');
+    } else {
+      key = r.leave_type || '其他'; label = key; color = getLeaveColor(r.leave_type);
+    }
+    if (!groups[key]) { groups[key] = { label: label, color: color, items: [] }; order.push(key); }
+    groups[key].items.push(r);
+  });
+  // 排序：休假→病假→事假→其他假各細項(依 OTHER_SUB_ORDER)，未列到的排最後
+  function rank(key){
+    if (key.indexOf('OTHER:') === 0){
+      var i = OTHER_SUB_ORDER.indexOf(key.slice(6));
+      return 100 + (i === -1 ? 999 : i);
+    }
+    var j = MAJOR_ORDER.indexOf(key);
+    return j === -1 ? 90 : j;
+  }
+  order.sort(function(a,b){ return rank(a) - rank(b); });
+
+  list.innerHTML = order.map(function(key){
+    var grp = groups[key];
+    var items = grp.items;
+    var color = grp.color;
+    var fmt = function(n){ return n.toFixed(1).replace(/\.0$/,''); };
+    var approved = items.filter(function(r){ return r.status === 'approved'; });
+    var subtotal;
+    if (key === '病假') {
+      // 生理假與其餘病假分開列（性平法：生理假每年前 3 天不併入病假）
+      var menD = approved.filter(function(r){ return r.leave_subtype === '生理假'; })
+                         .reduce(function(s,r){ return s + (r.days||0); }, 0);
+      var othD = approved.filter(function(r){ return r.leave_subtype !== '生理假'; })
+                         .reduce(function(s,r){ return s + (r.days||0); }, 0);
+      var parts = [];
+      if (menD > 0) parts.push('生理假已核准 ' + fmt(menD) + ' 天');
+      if (othD > 0) parts.push('病假已核准 ' + fmt(othD) + ' 天');
+      subtotal = items.length + ' 筆' + (parts.length ? '・' + parts.join('・') : '');
+    } else {
+      var usedDays = approved.reduce(function(s,r){ return s + (r.days||0); }, 0);
+      subtotal = items.length + ' 筆' + (usedDays > 0 ? '・已核准 ' + fmt(usedDays) + ' 天' : '');
+    }
+    var header = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:1.1rem 0 .5rem;">' +
+        '<div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:var(--text);flex:none;">' +
+          '<span style="width:10px;height:10px;border-radius:50%;background:'+color+';display:inline-block;flex:none;"></span>' + grp.label +
+        '</div>' +
+        '<span style="font-size:12px;color:#888;text-align:right;line-height:1.5;">' + subtotal + '</span>' +
+      '</div>';
+    var cards = items.map(function(r){ return leaveItemHtml(r,false,false,false); }).join('');
+    return header + cards;
+  }).join('');
 }
 
 function leaveItemHtml(r, isMgr, isGm, isHr) {
@@ -937,6 +985,30 @@ async function confirmLeave() {
     }
     proxyData = { emp_no: _pr.data[0].emp_no, unit_name: _pr.data[0].unit_name, title: _pr.data[0].title };
   }
+  // 生理假軟性提醒：性平法每年 3 日不併入病假，超過部分併入普通病假計算（僅提醒、不硬擋）
+  var menstrualNote = '';
+  if (subtype === '生理假') {
+    try {
+      var _y = new Date().getFullYear();
+      var _mr = await sb.from('leave_requests')
+        .select('days,status,start_date')
+        .eq('emp_no', currentUser.emp_no)
+        .eq('leave_type', '病假').eq('leave_subtype', '生理假')
+        .in('status', ['approved','pending'])
+        .gte('start_date', _y + '-01-01').lte('start_date', _y + '-12-31');
+      if (!_mr.error && _mr.data) {
+        var _used = _mr.data.reduce(function(s,r){ return s + (r.days||0); }, 0);
+        var _tot = _used + days;
+        if (_tot > 3) {
+          var _fmt = function(n){ return n.toFixed(1).replace(/\.0$/,''); };
+          menstrualNote = '<div style="margin-top:10px;padding:8px 10px;background:#fff6e6;border:1px solid #f0c36d;border-radius:6px;font-size:12px;color:#8a5a00;line-height:1.6;">' +
+            '⚠️ 本年度生理假連同本次共 <b>' + _fmt(_tot) + '</b> 天，已超過 3 天。<br>' +
+            '超過的 <b>' + _fmt(_tot - 3) + '</b> 天依規定<b>併入普通病假計算</b>（計入普通病假 30 天上限、薪資減半）。仍可送出。' +
+          '</div>';
+        }
+      }
+    } catch (e) { /* fail-open：查詢失敗不擋、不提醒 */ }
+  }
   const timeLabel = days <= 0.5
     ? startDate + ' ' + startTime + '～' + endTime
     : startDate + ' ～ ' + endDate;
@@ -945,7 +1017,7 @@ async function confirmLeave() {
     '<b>時間：</b>' + timeLabel + '<br>' +
     '<b>天數：</b>' + days + ' 天<br>' +
     '<b>事由：</b>' + reason + '<br>' +
-    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）';
+    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' + menstrualNote;
   document.getElementById('confirm-modal').style.display = 'flex';
 }
 
@@ -1579,7 +1651,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v115 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v119 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
