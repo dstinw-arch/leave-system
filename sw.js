@@ -1,8 +1,9 @@
-const CACHE_NAME = 'leave-system-v124';
+const CACHE_NAME = 'leave-system-v125';
 const ASSETS = [
   '/leave-system/',
   '/leave-system/index.html',
   '/leave-system/manifest.json',
+  '/leave-system/apple-touch-icon.png',
   '/leave-system/icon-192x192.png',
   '/leave-system/icon-512x512.png'
 ];
@@ -24,12 +25,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // API 請求（Supabase）永遠走網路，不快取
   if (e.request.url.includes('supabase.co')) {
     e.respondWith(fetch(e.request));
     return;
   }
-  // 其他資源：網路優先，失敗才用快取
   e.respondWith(
     fetch(e.request)
       .then(res => {
