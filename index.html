@@ -1841,7 +1841,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v123 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v124 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2439,6 +2439,7 @@ async function addEmployee() {
   if (res.error) { errEl.textContent = res.error.code==='23505'?'此員工編號已存在':'新增失敗：'+res.error.message; errEl.style.display='block'; return; }
   alert('✅ 已新增 '+name+'，初始密碼為員工編號');
   ['new-emp-name','new-emp-no','new-emp-title','new-emp-days'].forEach(function(id){ document.getElementById(id).value=''; });
+  CERT_LOADED = false; // 新增員工 → 證照統計下次重讀
   loadHrMgmt();
 }
 
@@ -2448,6 +2449,7 @@ async function toggleActive(btn, active) {
   var msg = active ? '確定要啟用 '+emp.name+' 的帳號？' : '確定要停用 '+emp.name+' 的帳號？停用後無法登入，假單紀錄保留。';
   if (!confirm(msg)) return;
   await sb.from('employees').update({is_active:active}).eq('emp_no', empNo);
+  CERT_LOADED = false; // 啟停用 → 證照統計下次重讀
   loadHrMgmt();
 }
 
@@ -2462,6 +2464,7 @@ async function changeUnit(sel) {
   // 歷史假單一併搬移
   await sb.from('leave_requests').update({unit_id:newUnitId, unit_name:newUnitName}).eq('emp_no', empNo);
   alert('✅ 單位已更新，歷史假單也已搬移至'+newUnitName+'');
+  CERT_LOADED = false; // 換單位 → 證照統計下次重讀
   loadHrMgmt();
 }
 
