@@ -147,6 +147,15 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .changepw-card h2 { font-size:1rem; font-weight:700; color:var(--primary-dark); margin-bottom:.4rem; }
 .changepw-card p { font-size:12px; color:var(--muted); margin-bottom:1.25rem; }
 .empty-hint { text-align:center; color:var(--muted); font-size:13px; padding:2rem 0; }
+
+/* ═══════════ 證照模組樣式 v120 ═══════════ */
+.topbar-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.modtabs{display:flex;gap:20px;flex-shrink:0}.modtabs button{position:relative;display:inline-flex;align-items:center;gap:5px;
+  border:none;background:none;padding:0 0 7px;cursor:pointer;
+  font-family:inherit;font-size:15.5px;font-weight:500;letter-spacing:.6px;
+  color:rgba(255,255,255,.5);transition:color .22s ease}.modtabs button.on{color:#fff;font-weight:700}.modtabs button::after{content:"";position:absolute;left:50%;bottom:0;height:2.5px;width:0;
+  background:var(--gold);border-radius:2px;transform:translateX(-50%);
+  transition:width .26s cubic-bezier(.4,0,.2,1)}.modtabs button.on::after{width:100%}.modcount{background:var(--gold);color:var(--primary-dark);font-size:9.5px;font-weight:700;
+  min-width:15px;height:15px;line-height:15px;border-radius:999px;padding:0 4px;text-align:center}.sec-row{display:flex;align-items:center;justify-content:space-between;margin:1.1rem 0 .5rem}.editsw{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--muted);font-weight:600;user-select:none}.editsw #editlbl{transition:color .2s}.editsw .sw{position:relative;display:inline-block}.editsw input{position:absolute;opacity:0;width:0;height:0}.sw-track{display:block;width:38px;height:22px;border-radius:999px;background:#d8d2c2;transition:background .22s}.sw-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .22s}.editsw input:checked+.sw-track{background:var(--primary)}.editsw input:checked+.sw-track .sw-knob{left:18px}.stat-sub{font-size:10px;color:var(--muted);margin-top:2px}.hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}.cert-item{background:var(--card);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:.55rem;box-shadow:0 1px 4px rgba(0,0,0,.06);border-left:4px solid var(--border)}.cert-item.pending{border-left-color:var(--warning)}.cert-item.approved{border-left-color:var(--success)}.cert-item.rejected{border-left-color:var(--danger)}.cert-head{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:.35rem}.cert-name{font-size:13.5px;font-weight:600;flex:1;line-height:1.45}.badge{font-size:10px;padding:3px 10px;border-radius:999px;font-weight:700;white-space:nowrap;flex-shrink:0}.badge-basic{background:#e4f0e8;color:var(--primary-dark)}.badge-other{background:#f5efe0;color:#8a6d1f}.badge-none{background:#f0eee8;color:var(--muted)}.badge-train{background:#e8eef5;color:#3c5a78}.cert-meta{font-size:11.5px;color:var(--muted);line-height:1.75}.cert-actions{display:flex;gap:.5rem;margin-top:.6rem}.tblwrap{background:var(--card);border-radius:var(--radius);box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:auto;max-height:400px;margin-bottom:.75rem}.tblwrap table{border-collapse:collapse;width:100%;font-size:11.5px;white-space:nowrap}.tblwrap th{background:var(--primary);color:#fff;padding:8px 9px;text-align:left;position:sticky;top:0;font-weight:600;font-size:11px;z-index:2}.tblwrap td{padding:7px 9px;border-bottom:1px solid #f0ece2}.tblwrap tbody tr:nth-child(even){background:#fbfaf6}.tblwrap td.num{text-align:right;font-variant-numeric:tabular-nums}.money{font-weight:700;color:var(--primary-dark)}.capped{color:var(--danger);font-weight:700}.yes{color:var(--primary);font-weight:700}.no{color:var(--danger);font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.chip{font-size:11px;padding:5px 11px;border-radius:999px;border:1.5px solid var(--border);background:#fafafa;cursor:pointer;font-family:inherit;color:var(--text)}.chip.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}.note{background:#fffbe9;border:1px solid #f0e2b6;border-radius:10px;padding:.7rem .85rem;font-size:11.5px;color:#7a6320;line-height:1.7;margin-bottom:.8rem}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--primary-dark);color:#fff;padding:11px 22px;border-radius:999px;font-size:13px;z-index:900;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.3)}.toast.show{opacity:1}.linebox{background:#e8f5e9;border:1px solid #b7dcbb;border-radius:10px;padding:.7rem .85rem;font-size:11.5px;color:#255c2a;line-height:1.7;margin-top:.7rem}.linebox b{display:block;margin-bottom:3px}.ugroup{background:var(--card);border-radius:var(--radius);box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden;margin-bottom:.7rem}.uhead{display:flex;align-items:center;gap:8px;background:var(--primary);color:#fff;padding:.55rem .85rem}.ucode{font-size:10px;background:rgba(255,255,255,.22);padding:2px 7px;border-radius:5px;font-variant-numeric:tabular-nums}.uname{font-size:13px;font-weight:700;flex:1}.usum{font-size:10.5px;opacity:.9;white-space:nowrap}.prow{display:flex;align-items:center;gap:8px;padding:.55rem .85rem;border-bottom:1px solid #f2efe6}.prow:last-child{border-bottom:none}.prow.onleave{background:#fbf6f6}.pname{flex:1;font-size:13px;font-weight:600;line-height:1.35;min-width:0}.pmeta{display:block;font-size:10.5px;color:var(--muted);font-weight:400}.pcnt{font-size:15px;font-weight:700;color:var(--primary);width:42px;text-align:right;font-variant-numeric:tabular-nums}.pcnt span{font-size:9.5px;color:var(--muted);font-weight:400;margin-left:1px}.pamt{font-size:14px;font-weight:700;color:var(--primary-dark);width:60px;text-align:right;font-variant-numeric:tabular-nums}.pamt.max{color:var(--warning)}.prow.onleave .pamt{color:var(--muted);font-size:12px;font-weight:600}.recbtn{padding:5px 12px;font-size:11.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap}.recbtn.edit{background:#e8f0e9;color:var(--primary-dark)}.recbtn.del{background:#f8d7da;color:#842029}.mgcard{background:var(--card);border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}.mghead{display:flex;align-items:center;gap:7px;margin-bottom:.55rem}.mghead b{font-size:14px}.mghead span{font-size:11px;color:var(--muted)}.mgstat{margin-left:auto;font-size:10px;background:#d1f0e0;color:#0f5132;padding:2px 8px;border-radius:20px}.mgrow{display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem}.mgrow select{flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fafafa;appearance:none}.mgoff{padding:6px 12px;border:none;border-radius:6px;background:#f8d7da;color:#842029;font-size:11px;font-family:inherit;font-weight:600;cursor:pointer}.mgnew{background:#f4f9f5;border:1px dashed var(--primary-light);border-radius:8px;padding:.5rem .6rem;margin-top:.2rem}.mgfield{flex:1}.mgfield label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px}.mgfield input{width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}.newtag{background:var(--primary);color:#fff;font-size:8.5px;padding:1px 5px;border-radius:4px;margin-left:2px;vertical-align:middle}.mgsave{padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;font-size:11px;font-family:inherit;font-weight:600;cursor:pointer;align-self:flex-end;height:32px}
 </style>
 </head>
 <body>
@@ -195,8 +204,14 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 <div id="page-app">
   <div class="topbar">
     <div class="topbar-inner">
-      <div class="topbar-brand">新北市淡水信用合作社</div>
-      <div class="topbar-title">員工請假系統</div>
+      <div class="topbar-row">
+        <div class="topbar-brand">新北市淡水信用合作社</div>
+        <div class="modtabs">
+          <button id="ms-leave" class="on" onclick="switchModule('leave')">請假</button>
+          <button id="ms-cert" onclick="switchModule('cert')">證照<span class="modcount" id="ms-badge" style="display:none">0</span></button>
+        </div>
+      </div>
+      <div class="topbar-title" id="topbar-title">員工請假系統</div>
       <div class="topbar-user">
         <div class="topbar-avatar" id="topbar-avatar">？</div>
         <div class="topbar-user-text">
@@ -479,6 +494,109 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       <br>
       <button onclick="doLogout()" style="width:100%;padding:10px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;font-size:13px;font-family:inherit;">登出</button>
     </div>
+
+    <!-- ═══════════ 證照模組頁面 ═══════════ -->
+    <div id="p-mine" class="page">
+      <div class="page-title">我的證照</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">已核可證照</div><div class="stat-val green" id="m-cnt">0</div><div class="stat-sub">張</div></div>
+        <div class="stat-card"><div class="stat-label">本月證照津貼</div><div class="stat-val orange" id="m-amt">0</div><div class="stat-sub" id="m-amtsub">元</div></div>
+      </div>
+      <div id="m-cap"></div>
+      <div class="section-title">審核中</div>
+      <div id="m-pending"></div>
+      <div class="section-title">已核可</div>
+      <div id="m-list"></div>
+      <div class="section-title">訓練與經歷</div>
+      <div id="m-train"></div>
+    </div>
+
+    <div id="p-add" class="page">
+      <div class="page-title">登錄證照</div>
+      <div class="form-card">
+        <div class="form-row">
+          <label>證照名稱</label>
+          <select id="f-cert" onchange="certOnPick()"><option value="">請選擇</option></select>
+          <div class="hint" id="f-tier"></div>
+        </div>
+        <div class="form-2col">
+          <div class="form-row"><label>取得年份（民國）</label><input id="f-year" type="number" placeholder="115" min="70" max="120"></div>
+          <div class="form-row"><label>證號</label><input id="f-no" placeholder="例 A123456789"></div>
+        </div>
+        <div class="hint" style="margin:-.35rem 0 .9rem">證號僅供人資查證使用，核可後不會出現在任何清單或報表。</div>
+        <button class="btn-submit" onclick="certSubmit()">送出登錄</button>
+      </div>
+      <div class="note">送出後會立即以 LINE 通知人資（葉芷娟）。人資會依證號至發證機關網站查證，核可或退回時你也會收到 LINE 通知。</div>
+      <div id="f-preview"></div>
+    </div>
+
+    <div id="p-review" class="page">
+      <div class="page-title">證照審核</div>
+      <div id="r-list"></div>
+    </div>
+
+    <div id="p-hradd" class="page">
+      <div class="page-title">代為建檔</div>
+      <div class="note">下列項目由人資依內部紀錄認定，不開放同仁自行登錄，因此不會出現在「登錄證照」的下拉選單中。</div>
+      <div class="form-card">
+        <div class="form-row"><label>同仁</label><select id="h-emp"><option value="">請選擇</option></select></div>
+        <div class="form-row"><label>項目</label><select id="h-cert"><option value="">請選擇</option></select></div>
+        <div class="form-2col">
+          <div class="form-row"><label>年份（民國）</label><input id="h-year" type="number" placeholder="115"></div>
+          <div class="form-row"><label>備註</label><input id="h-note" placeholder="例：113年內稽室調任"></div>
+        </div>
+        <button class="btn-submit" onclick="certHrAdd()">直接建檔（免審核）</button>
+      </div>
+      <div class="sec-row">
+        <div class="section-title" style="margin:0">現有紀錄</div>
+        <label class="editsw"><span id="editlbl">編輯</span><span class="sw"><input type="checkbox" id="editmode" onchange="certToggleEdit()"><span class="sw-track"><span class="sw-knob"></span></span></span></label>
+      </div>
+      <div id="h-list"></div>
+    </div>
+
+    <div id="p-stat" class="page">
+      <div class="page-title">證照統計</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">證照總張數</div><div class="stat-val green" id="s-cnt">0</div><div class="stat-sub" id="s-cntsub"></div></div>
+        <div class="stat-card"><div class="stat-label">津貼總額</div><div class="stat-val orange" id="s-amt">0</div><div class="stat-sub" id="s-amtsub"></div></div>
+      </div>
+      <div class="filter-bar">
+        <select id="s-unit" onchange="certRenderStat()"><option value="">全部單位</option></select>
+        <input id="s-kw" placeholder="搜尋姓名/員編" oninput="certRenderStat()">
+        <select id="s-sort" onchange="certRenderStat()">
+          <option value="unit">依單位排序</option><option value="amt">依津貼排序</option>
+          <option value="cnt">依張數排序</option><option value="emp">依員編排序</option>
+        </select>
+      </div>
+      <div id="s-list"></div>
+      <button class="btn-submit" style="background:#fff;color:var(--primary);border:1.5px solid var(--primary);box-shadow:none" onclick="certExportStat()">匯出 CSV</button>
+      <div class="note" style="margin-top:.8rem">畫面只顯示重點欄位；匯出的 CSV 含員編、職稱、職等、職級、張數、津貼等完整欄位（UTF-8，Excel 可直接開啟）。</div>
+    </div>
+
+    <div id="p-check" class="page">
+      <div class="page-title">法規查詢</div>
+      <div class="form-card">
+        <div class="form-row"><label>職等區間</label>
+          <div class="form-2col">
+            <input id="c-min" type="number" value="7" min="1" max="20" oninput="certRenderCheck()">
+            <input id="c-max" type="number" value="10" min="1" max="20" oninput="certRenderCheck()">
+          </div>
+          <div class="chips">
+            <button class="chip on" onclick="certSetRange(7,10,this)">襄理級以上 7–10</button>
+            <button class="chip" onclick="certSetRange(11,15,this)">經理級以上 11–15</button>
+            <button class="chip" onclick="certSetRange(1,20,this)">全部</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:.3rem"><label>檢查項目（可複選）</label><div class="chips" id="c-chips"></div></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">符合職等人數</div><div class="stat-val green" id="c-total">0</div><div class="stat-sub">人</div></div>
+        <div class="stat-card"><div class="stat-label">尚缺項目</div><div class="stat-val orange" id="c-miss">0</div><div class="stat-sub">人次</div></div>
+      </div>
+      <div class="tblwrap"><table id="c-tbl"></table></div>
+      <button class="btn-submit" style="background:#fff;color:var(--primary);border:1.5px solid var(--primary);box-shadow:none" onclick="certExportCheck()">匯出 CSV</button>
+    </div>
+
   </div>
 
   <nav class="bottom-nav" id="bottom-nav"></nav>
@@ -500,6 +618,36 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   </div>
 </div>
 
+
+<!-- ═══════════ 證照模組 modal ═══════════ -->
+<div class="modal-overlay" id="cert-modal">
+  <div class="modal">
+    <div class="modal-title">審核證照登錄</div>
+    <div class="modal-body" id="cert-mo-body"></div>
+    <div class="form-row" style="margin-top:.8rem"><label>退回原因</label><input id="cert-mo-reason" placeholder="例：查無此證號"></div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-approve" style="flex:1;padding:10px" onclick="certDoReview(true)">核可</button>
+      <button class="btn-sm btn-reject" style="flex:1;padding:10px" onclick="certDoReview(false)">退回</button>
+      <button class="btn-sm btn-outline" style="padding:10px" onclick="certCloseModal()">取消</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="cert-editmodal">
+  <div class="modal">
+    <div class="modal-title">修改建檔紀錄</div>
+    <div class="modal-body" id="er-info"></div>
+    <div class="form-2col" style="margin-top:.8rem">
+      <div class="form-row"><label>年份（民國）</label><input id="er-year" type="number"></div>
+      <div class="form-row"><label>備註</label><input id="er-note" placeholder="選填"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-approve" style="flex:1;padding:10px" onclick="certSaveEdit()">儲存</button>
+      <button class="btn-sm btn-outline" style="padding:10px" onclick="certCloseEdit()">取消</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="cert-toast"></div>
+
 <script>
 const SUPABASE_URL = 'https://nloegbeggwyprtqickqs.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
@@ -508,6 +656,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // 理事主席員工編號
 const CHAIRMAN_EMP_NO = '0871004';
 const GM_EMP_NO = '0881032'; // 總經理蔡景偉
+const CERT_HR_EMP_NO = '1132004'; // 葉芷娟：證照登錄 LINE 通知固定收件人（不通知王譽婷）
+let CERT_MODULE = 'leave';
 
 const LEAVE_TYPES = {
   '休假': ['特別休假','原住民族歲時祭儀假','防疫隔離假','防疫照顧假','疫苗接種假'],
@@ -946,6 +1096,30 @@ function updateSubtype() {
   sub.innerHTML = LEAVE_TYPES[type].map(s=>`<option value="${s}">${s}</option>`).join('');
 }
 
+// ── 代理人可用性檢查：代理人在申請期間若也請假（核准或審核中）→ 擋下改選 ──
+async function proxyLeaveConflict(proxyEmpNo, startDate, endDate) {
+  try {
+    var r = await sb.from('leave_requests')
+      .select('start_date,end_date,leave_type,leave_subtype,status')
+      .eq('emp_no', proxyEmpNo)
+      .in('status', ['approved','pending'])
+      .lte('start_date', endDate)
+      .gte('end_date', startDate);
+    if (r.error || !r.data || r.data.length === 0) return null;
+    return r.data;
+  } catch (e) { return null; }
+}
+function proxyConflictMsg(proxyName, rows) {
+  var seg = rows.map(function(x){
+    var d = x.start_date === x.end_date
+      ? x.start_date.replace(/-/g,'/')
+      : x.start_date.replace(/-/g,'/') + '～' + x.end_date.replace(/-/g,'/');
+    var st = x.status === 'approved' ? '已核准' : '審核中';
+    return d + ' ' + (x.leave_type||'') + (x.leave_subtype||'') + '（' + st + '）';
+  }).join('、');
+  return '代理人「' + proxyName + '」在你申請的期間也請假了：' + seg + '。該同事當天不在，無法擔任代理人，請改選其他人。';
+}
+
 async function confirmLeave() {
   const errEl = document.getElementById('apply-error');
   errEl.style.display = 'none';
@@ -984,6 +1158,12 @@ async function confirmLeave() {
       errEl.style.display='block'; return;
     }
     proxyData = { emp_no: _pr.data[0].emp_no, unit_name: _pr.data[0].unit_name, title: _pr.data[0].title };
+  }
+  // 代理人可用性檢查：代理人於申請期間也請假（核准/審核中）→ 擋下、請改選
+  var _pconf = await proxyLeaveConflict(proxyData.emp_no, startDate, endDate);
+  if (_pconf) {
+    errEl.textContent = proxyConflictMsg(proxyName, _pconf);
+    errEl.style.display = 'block'; return;
   }
   // 生理假軟性提醒：性平法每年 3 日不併入病假，超過部分併入普通病假計算（僅提醒、不硬擋）
   var menstrualNote = '';
@@ -1058,6 +1238,12 @@ async function doSubmitLeave() {
   if (!resolvedProxyEmpNo) {
     errEl.textContent='查無代理人「'+proxyName+'」，請確認姓名是否正確，或從建議清單點選';
     errEl.style.display='block'; return;
+  }
+  // 硬防線：代理人於申請期間也請假 → 擋下（防繞過 confirmLeave）
+  var _pc2 = await proxyLeaveConflict(resolvedProxyEmpNo, startDate, endDate);
+  if (_pc2) {
+    errEl.textContent = proxyConflictMsg(proxyName, _pc2);
+    errEl.style.display = 'block'; return;
   }
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
@@ -1651,7 +1837,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v119 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v122 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2225,6 +2411,11 @@ function empMgmtItemHtml(e) {
       roleBtn('is_gm', '總經理', '#f3e5ff', '#6b21a8', 'var(--muted)') +
       '<button data-empno="'+e.emp_no+'" onclick="resetPw(this)" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fafafa;color:var(--muted);cursor:pointer;font-size:11px;font-family:inherit;">重設密碼</button>' +
     '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;margin-top:.55rem;align-items:end;background:#f4f9f5;border:1px dashed var(--primary-light);border-radius:8px;padding:.5rem .6rem;">' +
+      '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職等</label><input type="number" data-empno="'+e.emp_no+'" data-fld="grade" value="'+(e.job_grade==null?"":e.job_grade)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+      '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職級</label><input type="number" data-empno="'+e.emp_no+'" data-fld="level" value="'+(e.job_level==null?"":e.job_level)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+      '<button data-empno="'+e.emp_no+'" onclick="saveGradeLevel(this)" style="padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:11px;font-family:inherit;font-weight:600;height:32px;">存職等</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -2396,6 +2587,370 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+/* ═══════════ 證照模組程式 v120 ═══════════ */
+
+/* ═══════════════════════ 證照模組 v120 ═══════════════════════ */
+/* 資料來源：certificates / employee_certificates / employees(job_grade,job_level) */
+const CERT_ONLEAVE = new Set(['1082004','1112012','1132021']); // 育嬰留停：不計發津貼（如有異動請告知調整）
+const CERT_CAP_OTHER = 4, CERT_CAP_TOTAL = 2000, CERT_BASIC = 300, CERT_OTHER = 200;
+
+let CERT_MASTER = [];      // {id,name,category,tier,mgroup,mlogic,hr_only,sort,active}
+let CERT_BY_ID = {};       // id -> master
+let CERT_EMPS = [];        // {emp_no,name,unit_id,unit_name,title,grade,level,active}
+let CERT_EMP_BY_NO = {};
+let CERT_RECORDS = [];     // {id,emp_no,certificate_id,cert_no,year,status,source,note,reject_reason}
+let CERT_LOADED = false, CERT_PAGE = 'p-mine', CERT_EDITMODE = false;
+
+function cEsc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m]; }); }
+function cToast(m){ var t=document.getElementById('cert-toast'); if(!t)return; t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('show'); },2300); }
+function certTierBadge(t){ return t==='basic'?'<span class="badge badge-basic">基本 300</span>':t==='other'?'<span class="badge badge-other">其他 200</span>':'<span class="badge badge-none">不計津貼</span>'; }
+
+// ── 載入證照資料（首次切到證照模組時）──
+async function ensureCertData(force){
+  if(CERT_LOADED && !force) return;
+  var mc = await sb.from('certificates').select('*').order('sort_order');
+  CERT_MASTER = (mc.data||[]).map(function(c){ return {id:c.id,name:c.name,category:c.category,tier:c.allowance_tier,mgroup:c.merge_group,mlogic:c.merge_logic,hr_only:c.hr_only,sort:c.sort_order,active:c.is_active}; });
+  CERT_BY_ID = {}; CERT_MASTER.forEach(function(c){ CERT_BY_ID[c.id]=c; });
+  var me = await sb.from('employees').select('emp_no,name,unit_id,unit_name,title,job_grade,job_level,is_active').limit(500);
+  CERT_EMPS = (me.data||[]).map(function(e){ return {emp_no:e.emp_no,name:e.name,unit_id:e.unit_id,unit_name:e.unit_name,title:e.title||'',grade:e.job_grade,level:e.job_level,active:e.is_active!==false}; });
+  CERT_EMP_BY_NO = {}; CERT_EMPS.forEach(function(e){ CERT_EMP_BY_NO[e.emp_no]=e; });
+  var recs = await fetchAllRows('employee_certificates','*',null);
+  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason}; });
+  CERT_LOADED = true;
+  certInitForm(); certInitStat(); certInitCheck(); certInitHrAdd();
+}
+async function certReloadRecords(){
+  var recs = await fetchAllRows('employee_certificates','*',null);
+  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason}; });
+}
+
+// ── 津貼計算（比照預覽 calc）──
+function certCalc(empNo){
+  var emp = CERT_EMP_BY_NO[empNo];
+  var recs = CERT_RECORDS.filter(function(r){ return r.emp_no===empNo && r.status==='approved'; });
+  var owned = {}, certSet = {};
+  recs.forEach(function(r){ var c=CERT_BY_ID[r.certificate_id]; if(!c)return; owned[c.id]=1; if(c.category==='證照') certSet[c.id]=1; });
+  var size = {}; CERT_MASTER.forEach(function(c){ if(c.mgroup) size[c.mgroup]=(size[c.mgroup]||0)+1; });
+  var have = {}; Object.keys(owned).forEach(function(id){ var g=CERT_BY_ID[id].mgroup; if(g) have[g]=(have[g]||0)+1; });
+  var b=0,o=0;
+  Object.keys(owned).forEach(function(id){ var c=CERT_BY_ID[id]; if(c.mgroup || (c.tier!=='basic'&&c.tier!=='other')) return; if(c.tier==='basic') b++; else o++; });
+  Object.keys(have).forEach(function(g){ var m=CERT_MASTER.find(function(c){return c.mgroup===g;}); var ok = m.mlogic==='all' ? have[g]>=size[g] : have[g]>=1; if(ok){ if(m.tier==='basic') b++; else o++; } });
+  var oc=Math.min(o,CERT_CAP_OTHER), raw=b*CERT_BASIC+oc*CERT_OTHER;
+  var payable = emp && emp.active && !CERT_ONLEAVE.has(empNo);
+  return { basic:b, other:oc, otherRaw:o, raw:raw, amt: payable?Math.min(raw,CERT_CAP_TOTAL):0, capped: raw>CERT_CAP_TOTAL, payable:payable, cnt:Object.keys(certSet).length, groups:{have:have,size:size} };
+}
+
+// ── 模組切換 ──
+async function switchModule(m){
+  CERT_MODULE = m;
+  document.getElementById('ms-leave').classList.toggle('on', m==='leave');
+  document.getElementById('ms-cert').classList.toggle('on', m==='cert');
+  var tt=document.getElementById('topbar-title'); if(tt) tt.textContent = (m==='cert'?'員工證照系統':'員工請假系統');
+  if(m==='leave'){
+    buildNav();
+    showPage('emp-home', document.getElementById('bnav-emp-home'));
+    loadEmpHome();
+    return;
+  }
+  document.getElementById('bottom-nav').innerHTML = '';
+  cToast('載入證照資料中…');
+  await ensureCertData();
+  buildCertNav();
+}
+function certBadgeCount(){
+  if(currentUser && currentUser.is_hr) return CERT_RECORDS.filter(function(r){return r.status==='pending';}).length;
+  return CERT_RECORDS.filter(function(r){return r.status==='pending' && r.emp_no===currentUser.emp_no;}).length;
+}
+function updateCertBadge(){
+  var b=document.getElementById('ms-badge'); if(!b)return;
+  var n=certBadgeCount(); b.style.display = n>0?'':'none'; b.textContent=n;
+}
+function buildCertNav(){
+  var u=currentUser, items=[['p-mine','📋','我的證照'],['p-add','➕','登錄證照']];
+  if(u.is_hr){ items=[['p-review','✅','審核'],['p-stat','📊','統計'],['p-check','🔍','法規'],['p-hradd','🗂️','代建檔'],['p-mine','📋','我的'],['p-add','➕','登錄']]; }
+  document.getElementById('bottom-nav').innerHTML = items.map(function(it,i){
+    return '<button class="bnav'+(i===0?' active':'')+'" id="certnav-'+it[0]+'" onclick="certGo(\''+it[0]+'\',this)"><span class="bnav-icon">'+it[1]+'</span>'+it[2]+'</button>';
+  }).join('');
+  certGo(items[0][0], document.getElementById('certnav-'+items[0][0]));
+}
+function certGo(id, btn){
+  showPage(id, btn);
+  CERT_PAGE=id;
+  updateCertBadge();
+  if(id==='p-mine') certRenderMine();
+  else if(id==='p-review') certRenderReview();
+  else if(id==='p-stat') certRenderStat();
+  else if(id==='p-check') certRenderCheck();
+  else if(id==='p-hradd') certRenderHrAdd();
+}
+
+/* ── 我的證照 ── */
+function certRenderMine(){
+  var no=currentUser.emp_no, r=certCalc(no);
+  document.getElementById('m-cnt').textContent=r.cnt;
+  document.getElementById('m-amt').textContent=r.amt.toLocaleString();
+  document.getElementById('m-amtsub').textContent='基本 '+r.basic+' 張 · 其他 '+r.other+' 張';
+  document.getElementById('m-cap').innerHTML = r.capped ? '<div class="note">證照津貼上限為每人 <b>2,000 元</b>，你已達上限，實發 <b>2,000 元</b>。</div>' : '';
+  var mine=CERT_RECORDS.filter(function(x){return x.emp_no===no && x.status==='pending';});
+  document.getElementById('m-pending').innerHTML = mine.length ? mine.map(function(p){ var c=CERT_BY_ID[p.certificate_id]||{name:'?'};
+    return '<div class="cert-item pending"><div class="cert-head"><div class="cert-name">'+cEsc(c.name)+'</div><span class="badge badge-pending">待人資審核</span></div><div class="cert-meta">取得年份　民國 '+p.year+' 年</div></div>';
+  }).join('') : '<div class="empty-hint" style="padding:1.2rem 0">目前沒有審核中的登錄</div>';
+  var mineRej=CERT_RECORDS.filter(function(x){return x.emp_no===no && x.status==='rejected';});
+  var rejHtml = mineRej.length ? mineRej.map(function(p){ var c=CERT_BY_ID[p.certificate_id]||{name:'?'};
+    return '<div class="cert-item rejected"><div class="cert-head"><div class="cert-name">'+cEsc(c.name)+'</div><span class="badge badge-rejected">已退回</span></div><div class="cert-meta">民國 '+p.year+' 年'+(p.reject_reason?'<br>退回原因　'+cEsc(p.reject_reason):'')+'</div></div>';
+  }).join('') : '';
+  var approved=CERT_RECORDS.filter(function(x){return x.emp_no===no && x.status==='approved' && (CERT_BY_ID[x.certificate_id]||{}).category==='證照';}).sort(function(a,b){return b.year-a.year;});
+  document.getElementById('m-list').innerHTML = rejHtml + (approved.length ? approved.map(function(p){ var c=CERT_BY_ID[p.certificate_id];
+    var mergeTxt=''; if(c.mgroup){ mergeTxt = '<br>合併計算　'+(c.mlogic==='all' ? cEsc(c.mgroup)+'類需全部取得才計 1 張'+(r.groups.have[c.mgroup]>=r.groups.size[c.mgroup]?'（已集滿）':'（尚未集滿，暫不計津貼）') : cEsc(c.mgroup)+'類任一張即計 1 張'); }
+    return '<div class="cert-item approved"><div class="cert-head"><div class="cert-name">'+cEsc(c.name)+'</div>'+certTierBadge(c.tier)+'</div><div class="cert-meta">取得年份　民國 '+p.year+' 年'+mergeTxt+'</div></div>';
+  }).join('') : (rejHtml?'':'<div class="empty-hint">還沒有已核可的證照<br>到「登錄證照」新增第一張</div>'));
+  var train=CERT_RECORDS.filter(function(x){return x.emp_no===no && x.status==='approved' && (CERT_BY_ID[x.certificate_id]||{}).category==='訓練經歷';}).sort(function(a,b){return b.year-a.year;});
+  document.getElementById('m-train').innerHTML = train.length ? train.map(function(p){ var c=CERT_BY_ID[p.certificate_id];
+    return '<div class="cert-item"><div class="cert-head"><div class="cert-name">'+cEsc(c.name)+'</div><span class="badge badge-train">不計張數</span></div><div class="cert-meta">參加年份　民國 '+p.year+' 年</div></div>';
+  }).join('') : '<div class="empty-hint" style="padding:1.2rem 0">沒有訓練或經歷紀錄</div>';
+}
+
+/* ── 登錄證照 ── */
+var CERT_FORM_GROUPS=[
+  ['💰 基本證照　每張 300 元', function(c){return c.category==='證照'&&c.tier==='basic';}],
+  ['💵 其他證照　每張 200 元（最多 4 張）', function(c){return c.category==='證照'&&c.tier==='other';}],
+  ['📄 計入張數・不計津貼', function(c){return c.category==='證照'&&c.tier==='none';}]
+];
+function certInitForm(){
+  var sel=document.getElementById('f-cert'); if(!sel)return;
+  sel.innerHTML='<option value="">請選擇</option>';
+  CERT_FORM_GROUPS.forEach(function(g){
+    var list=CERT_MASTER.filter(function(c){ return g[1](c) && !c.hr_only && c.active; });
+    if(!list.length) return;
+    sel.insertAdjacentHTML('beforeend','<optgroup label="'+g[0]+'">'+list.map(function(c){return '<option value="'+c.id+'">'+cEsc(c.name)+'</option>';}).join('')+'</optgroup>');
+  });
+}
+function certOnPick(){
+  var v=document.getElementById('f-cert').value, h=document.getElementById('f-tier');
+  if(v===''){ h.textContent=''; return; }
+  var c=CERT_BY_ID[v], no=currentUser.emp_no;
+  var owned=CERT_RECORDS.some(function(r){ return r.emp_no===no && String(r.certificate_id)===String(v) && (r.status==='approved'||r.status==='pending'); });
+  h.innerHTML = (c.tier==='basic'?'基本證照，核可後每張 300 元。':c.tier==='other'?'其他證照，核可後每張 200 元（其他類最多計 4 張）。':'此證照計入張數，但不計發津貼。')
+    + (c.mgroup?(c.mlogic==='all'?'<br>「'+cEsc(c.mgroup)+'」類證照需<b>全部取得</b>才計 1 張津貼。':'<br>與「'+cEsc(c.mgroup)+'」類證照合併計算，任一張即計 1 張。'):'')
+    + (owned?'<br><b style="color:var(--danger)">你已登錄過這張證照（審核中或已核可）。</b>':'');
+}
+async function certSubmit(){
+  var id=document.getElementById('f-cert').value, yr=parseInt(document.getElementById('f-year').value,10), no=document.getElementById('f-no').value.trim();
+  if(id===''){ cToast('請選擇證照名稱'); return; }
+  if(!yr||yr<70||yr>120){ cToast('請填寫民國年份（70–120）'); return; }
+  if(!no){ cToast('請填寫證號供人資查證'); return; }
+  var c=CERT_BY_ID[id], me=currentUser;
+  var ins=await sb.from('employee_certificates').insert({ emp_no:me.emp_no, certificate_id:parseInt(id,10), cert_no:no, obtained_year:yr, status:'pending', source:'self' });
+  if(ins.error){ cToast(ins.error.code==='23505'?'這張證照（同年份）你已登錄過':'送出失敗：'+ins.error.message); return; }
+  // LINE 通知人資（固定葉芷娟，不通知王譽婷）
+  var msg='【證照登錄待審】'+me.name+'（'+(me.unit_name||'')+'）登錄「'+c.name+'」，取得年份 民國 '+yr+' 年。請至請假系統 › 證照 › 審核 進行查證。';
+  notifyEmployee(CERT_HR_EMP_NO, msg);
+  document.getElementById('f-preview').innerHTML='<div class="linebox"><b>已送出，LINE 通知已發給 葉芷娟（人資）</b><br>'+cEsc(msg)+'</div>';
+  document.getElementById('f-cert').value=''; document.getElementById('f-year').value=''; document.getElementById('f-no').value=''; document.getElementById('f-tier').textContent='';
+  await certReloadRecords(); updateCertBadge(); cToast('已送出，等待人資審核');
+}
+
+/* ── 審核（HR）── */
+var CERT_CUR=null;
+function certRenderReview(){
+  var pend=CERT_RECORDS.filter(function(r){return r.status==='pending';}).sort(function(a,b){return a.id-b.id;});
+  document.getElementById('r-list').innerHTML = pend.length ? pend.map(function(p){ var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?',unit_name:'',title:''}, c=CERT_BY_ID[p.certificate_id]||{name:'?',tier:'none'};
+    return '<div class="cert-item pending"><div class="cert-head"><div class="cert-name">'+cEsc(e.name)+' · '+cEsc(c.name)+'</div><span class="badge badge-pending">待審核</span></div>'
+      +'<div class="cert-meta">員編單位　'+p.emp_no+'　'+cEsc(e.unit_name)+' '+cEsc(e.title)+'<br>取得年份　民國 '+p.year+' 年　'+certTierBadge(c.tier)+'<br>證　　號　<b>'+cEsc(p.cert_no||'—')+'</b></div>'
+      +'<div class="cert-actions"><button class="btn-sm btn-approve" onclick="certOpenReview('+p.id+')">查證並審核</button></div></div>';
+  }).join('') : '<div class="empty-hint">目前沒有待審核的證照登錄</div>';
+}
+function certOpenReview(id){
+  CERT_CUR=id; var p=CERT_RECORDS.find(function(r){return r.id===id;}); if(!p)return;
+  var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?',unit_name:'',title:''}, c=CERT_BY_ID[p.certificate_id]||{name:'?'};
+  document.getElementById('cert-mo-body').innerHTML='申請人　'+cEsc(e.name)+'（'+p.emp_no+'）<br>單　位　'+cEsc(e.unit_name)+' '+cEsc(e.title)+'<br>證　照　'+cEsc(c.name)+'<br>取得年份　民國 '+p.year+' 年<br>證　號　<b>'+cEsc(p.cert_no||'—')+'</b><div class="note" style="margin:.7rem 0 0">請先至發證機關網站以證號查證，確認為真後再核可。核可後此證號不會出現在任何報表。</div>';
+  document.getElementById('cert-mo-reason').value='';
+  document.getElementById('cert-modal').classList.add('show');
+}
+function certCloseModal(){ document.getElementById('cert-modal').classList.remove('show'); CERT_CUR=null; }
+async function certDoReview(ok){
+  if(CERT_CUR===null)return;
+  var p=CERT_RECORDS.find(function(r){return r.id===CERT_CUR;}); if(!p)return;
+  var reason=document.getElementById('cert-mo-reason').value.trim();
+  if(!ok && !reason){ cToast('退回時請填寫原因'); return; }
+  var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?'}, c=CERT_BY_ID[p.certificate_id]||{name:'?'};
+  var upd={ status: ok?'approved':'rejected', reviewed_by: currentUser.emp_no, reviewed_at: new Date().toISOString(), reject_reason: ok?null:reason };
+  var res=await sb.from('employee_certificates').update(upd).eq('id',p.id);
+  if(res.error){ cToast('更新失敗：'+res.error.message); return; }
+  var msg = ok ? '【證照核可】你登錄的「'+c.name+'」（民國 '+p.year+' 年）已由人資核可。'
+              : '【證照退回】你登錄的「'+c.name+'」（民國 '+p.year+' 年）未通過，原因：'+reason;
+  notifyEmployee(p.emp_no, msg);
+  certCloseModal(); await certReloadRecords(); certRenderReview(); updateCertBadge();
+  cToast(ok?'已核可，LINE 已通知 '+e.name:'已退回，LINE 已通知 '+e.name);
+}
+
+/* ── 統計（HR）── */
+function certInitStat(){
+  var s=document.getElementById('s-unit'); if(!s)return;
+  var units=[["7","管理部"],["16","營業部"],["25","水碓分社"],["34","竹圍分社"],["43","英專分社"],["52","義山分社"],["61","三芝分社"],["70","八里分社"],["89","成州分社"],["98","五股分社"],["104","萬金分社"],["113","新莊分社"],["122","泰山分社"],["131","林口分社"],["140","板橋分社"],["159","蘆洲分社"],["168","三重分社"]];
+  s.innerHTML='<option value="">全部單位</option>'+units.map(function(u){return '<option value="'+u[1]+'">'+u[0].padStart(4,'0')+'　'+cEsc(u[1])+'</option>';}).join('');
+}
+function certUnitOrder(id){ var m={"7":1,"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17}; return m[id]||999; }
+function certRenderStat(){
+  var unit=document.getElementById('s-unit').value, kw=document.getElementById('s-kw').value.trim(), sort=document.getElementById('s-sort').value;
+  var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e, r:certCalc(e.emp_no)};});
+  var totalCnt=rows.reduce(function(a,x){return a+x.r.cnt;},0), totalAmt=rows.reduce(function(a,x){return a+x.r.amt;},0);
+  document.getElementById('s-cnt').textContent=totalCnt;
+  document.getElementById('s-cntsub').textContent='在職 '+rows.length+' 人';
+  document.getElementById('s-amt').textContent=totalAmt.toLocaleString();
+  document.getElementById('s-amtsub').textContent='領取 '+rows.filter(function(x){return x.r.amt>0;}).length+' 人';
+  if(unit) rows=rows.filter(function(x){return x.e.unit_name===unit;});
+  if(kw) rows=rows.filter(function(x){return x.e.name.indexOf(kw)>=0||x.e.emp_no.indexOf(kw)>=0;});
+  rows.sort(function(a,b){ return sort==='amt'? (b.r.amt-a.r.amt||b.r.cnt-a.r.cnt) : sort==='cnt'? (b.r.cnt-a.r.cnt||b.r.amt-a.r.amt) : sort==='emp'? a.e.emp_no.localeCompare(b.e.emp_no) : (certUnitOrder(a.e.unit_id)-certUnitOrder(b.e.unit_id)||a.e.emp_no.localeCompare(b.e.emp_no)); });
+  var out;
+  if(rows.length===0){ out='<div class="empty-hint">查無符合條件的同仁</div>'; }
+  else if(sort==='unit'){
+    var groups={}; rows.forEach(function(x){ var k=x.e.unit_id; (groups[k]=groups[k]||[]).push(x); });
+    var keys=Object.keys(groups).sort(function(a,b){return certUnitOrder(a)-certUnitOrder(b);});
+    out=keys.map(function(k){ var g=groups[k], nm=g[0].e.unit_name; var sc=g.reduce(function(a,x){return a+x.r.cnt;},0), sa=g.reduce(function(a,x){return a+x.r.amt;},0);
+      return '<div class="ugroup"><div class="uhead"><span class="ucode">'+String(k).padStart(4,'0')+'</span><span class="uname">'+cEsc(nm)+'</span><span class="usum">'+g.length+' 人 · '+sc+' 張 · '+sa.toLocaleString()+' 元</span></div>'+g.map(certRowHtml).join('')+'</div>';
+    }).join('');
+  } else { out='<div class="ugroup">'+rows.map(certRowHtml).join('')+'</div>'; }
+  document.getElementById('s-list').innerHTML=out;
+}
+function certRowHtml(x){ var e=x.e, r=x.r, leave=CERT_ONLEAVE.has(e.emp_no);
+  return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(e.name)+'<span class="pmeta">'+cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
+}
+function certExportStat(){
+  var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e,r:certCalc(e.emp_no)};})
+    .sort(function(a,b){return certUnitOrder(a.e.unit_id)-certUnitOrder(b.e.unit_id)||a.e.emp_no.localeCompare(b.e.emp_no);});
+  var head=['員編','姓名','單位','職稱','職等','職級','證照張數','證照津貼(元)','狀態'];
+  var lines=[head.join(',')];
+  rows.forEach(function(x){ var e=x.e,r=x.r; var st=CERT_ONLEAVE.has(e.emp_no)?'留停':(r.amt>0?'領取':'—');
+    lines.push([e.emp_no,e.name,e.unit_name,e.title,(e.grade==null?'':e.grade),(e.level==null?'':e.level),r.cnt,r.amt,st].map(certCsvCell).join(',')); });
+  certDownloadCsv('員工證照與津貼統計表.csv', lines.join('\r\n'));
+  cToast('已匯出 統計表 CSV');
+}
+
+/* ── 法規查詢（HR）── */
+var CERT_SELCHECK=new Set();
+function certInitCheck(){
+  var defaults=['曾擔任內部稽核人員一年以上','參加過淡信舉辦之稽核訓練','參加過實習查帳','防制洗錢及打擊資恐人員職前研習班','法令遵循人員職前研習班','銀行內部控制與內部稽核(一般)'];
+  var wrap=document.getElementById('c-chips'); if(!wrap)return; wrap.innerHTML=''; CERT_SELCHECK=new Set();
+  CERT_MASTER.forEach(function(c){
+    if(defaults.indexOf(c.name)<0 && c.category!=='訓練經歷' && c.tier==='none') return;
+    if(defaults.indexOf(c.name)>=0) CERT_SELCHECK.add(c.id);
+    wrap.insertAdjacentHTML('beforeend','<button class="chip'+(CERT_SELCHECK.has(c.id)?' on':'')+'" data-i="'+c.id+'" onclick="certTog('+c.id+',this)">'+cEsc(c.name)+'</button>');
+  });
+}
+function certTog(id,el){ if(CERT_SELCHECK.has(id)) CERT_SELCHECK.delete(id); else CERT_SELCHECK.add(id); el.classList.toggle('on'); certRenderCheck(); }
+function certSetRange(a,b,el){ document.getElementById('c-min').value=a; document.getElementById('c-max').value=b; var p=el.parentNode.querySelectorAll('.chip'); p.forEach(function(c){c.classList.remove('on');}); el.classList.add('on'); certRenderCheck(); }
+function certRenderCheck(){
+  var lo=parseInt(document.getElementById('c-min').value,10), hi=parseInt(document.getElementById('c-max').value,10);
+  var sel=Array.from(CERT_SELCHECK);
+  var emps=CERT_EMPS.filter(function(e){return e.active && e.grade!=null && e.grade>=lo && e.grade<=hi;})
+    .sort(function(a,b){return b.grade-a.grade||certUnitOrder(a.unit_id)-certUnitOrder(b.unit_id)||a.emp_no.localeCompare(b.emp_no);});
+  var miss=0;
+  var body=emps.map(function(e){
+    var has={}; CERT_RECORDS.filter(function(r){return r.emp_no===e.emp_no && r.status==='approved';}).forEach(function(r){ if(has[r.certificate_id]==null||r.year>has[r.certificate_id]) has[r.certificate_id]=r.year; });
+    var cells=sel.map(function(id){ if(has[id]!=null) return '<td class="num yes">'+has[id]+'</td>'; miss++; return '<td class="num no">✕</td>'; }).join('');
+    return '<tr><td>'+String(e.unit_id).padStart(4,'0')+' '+cEsc(e.unit_name)+'</td><td>'+e.emp_no+'</td><td>'+cEsc(e.name)+'</td><td class="num">'+e.grade+'</td>'+cells+'</tr>';
+  }).join('');
+  document.getElementById('c-total').textContent=emps.length;
+  document.getElementById('c-miss').textContent=miss;
+  document.getElementById('c-tbl').innerHTML = sel.length
+    ? '<thead><tr><th>單位</th><th>員編</th><th>姓名</th><th>職等</th>'+sel.map(function(id){return '<th>'+cEsc((CERT_BY_ID[id]||{name:''}).name).slice(0,12)+'</th>';}).join('')+'</tr></thead><tbody>'+body+'</tbody>'
+    : '<tbody><tr><td style="padding:2rem;text-align:center;color:var(--muted)">請至少勾選一個檢查項目</td></tr></tbody>';
+}
+function certExportCheck(){
+  var lo=parseInt(document.getElementById('c-min').value,10), hi=parseInt(document.getElementById('c-max').value,10), sel=Array.from(CERT_SELCHECK);
+  if(!sel.length){ cToast('請先勾選檢查項目'); return; }
+  var emps=CERT_EMPS.filter(function(e){return e.active && e.grade!=null && e.grade>=lo && e.grade<=hi;})
+    .sort(function(a,b){return b.grade-a.grade||certUnitOrder(a.unit_id)-certUnitOrder(b.unit_id)||a.emp_no.localeCompare(b.emp_no);});
+  var head=['單位','員編','姓名','職等'].concat(sel.map(function(id){return (CERT_BY_ID[id]||{name:''}).name;}));
+  var lines=[head.map(certCsvCell).join(',')];
+  emps.forEach(function(e){ var has={}; CERT_RECORDS.filter(function(r){return r.emp_no===e.emp_no && r.status==='approved';}).forEach(function(r){ if(has[r.certificate_id]==null||r.year>has[r.certificate_id]) has[r.certificate_id]=r.year; });
+    var row=[e.unit_name,e.emp_no,e.name,e.grade].concat(sel.map(function(id){return has[id]!=null?has[id]:'✕';}));
+    lines.push(row.map(certCsvCell).join(',')); });
+  certDownloadCsv('法規查核清單.csv', lines.join('\r\n'));
+  cToast('已匯出 法規查核清單 CSV');
+}
+
+/* ── 代建檔（HR）── */
+function certInitHrAdd(){
+  var es=document.getElementById('h-emp'), cs=document.getElementById('h-cert'); if(!es||!cs)return;
+  es.innerHTML='<option value="">請選擇</option>'+CERT_EMPS.filter(function(e){return e.active;}).sort(function(a,b){return certUnitOrder(a.unit_id)-certUnitOrder(b.unit_id)||a.emp_no.localeCompare(b.emp_no);}).map(function(e){return '<option value="'+e.emp_no+'">'+String(e.unit_id).padStart(4,'0')+' '+cEsc(e.unit_name)+'　'+cEsc(e.name)+'</option>';}).join('');
+  cs.innerHTML='<option value="">請選擇</option>'+CERT_MASTER.filter(function(c){return c.hr_only && c.active;}).map(function(c){return '<option value="'+c.id+'">'+cEsc(c.name)+'</option>';}).join('');
+}
+async function certHrAdd(){
+  var no=document.getElementById('h-emp').value, id=document.getElementById('h-cert').value, yr=parseInt(document.getElementById('h-year').value,10), nt=document.getElementById('h-note').value.trim();
+  if(!no||id===''){ cToast('請選擇同仁與項目'); return; }
+  if(!yr||yr<70||yr>120){ cToast('請填寫民國年份'); return; }
+  var ins=await sb.from('employee_certificates').insert({ emp_no:no, certificate_id:parseInt(id,10), obtained_year:yr, status:'approved', source:'hr', note:nt||null, reviewed_by:currentUser.emp_no, reviewed_at:new Date().toISOString() });
+  if(ins.error){ cToast(ins.error.code==='23505'?'該同仁此項目此年份已建檔':'建檔失敗：'+ins.error.message); return; }
+  document.getElementById('h-year').value=''; document.getElementById('h-note').value='';
+  await certReloadRecords(); certRenderHrAdd(); cToast('已為 '+((CERT_EMP_BY_NO[no]||{}).name||no)+' 建檔');
+}
+function certToggleEdit(){ CERT_EDITMODE=document.getElementById('editmode').checked; document.getElementById('editlbl').style.color=CERT_EDITMODE?'var(--primary)':'var(--muted)'; certRenderHrAdd(); cToast(CERT_EDITMODE?'編輯模式開啟，可修改或刪除紀錄':'編輯模式關閉'); }
+function certRenderHrAdd(){
+  var recs=CERT_RECORDS.filter(function(r){ var c=CERT_BY_ID[r.certificate_id]; return c && c.hr_only; }).slice()
+    .sort(function(a,b){return b.year-a.year;});
+  var groups={};
+  recs.forEach(function(r){ var k=(CERT_BY_ID[r.certificate_id]||{name:'?'}).name; (groups[k]=groups[k]||[]).push(r); });
+  var keys=Object.keys(groups);
+  document.getElementById('h-list').innerHTML = keys.length ? keys.map(function(k){ var g=groups[k];
+    return '<div class="ugroup"><div class="uhead"><span class="uname">'+cEsc(k)+'</span><span class="usum">'+g.length+' 人</span></div>'
+      + g.map(function(r){ var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?',unit_name:''};
+        return '<div class="prow"><div class="pname">'+cEsc(e.name)+'<span class="pmeta">'+cEsc(e.unit_name)+' · 民國 '+r.year+(r.note?' · '+cEsc(r.note):'')+'</span></div>'
+          + (CERT_EDITMODE?'<button class="recbtn edit" onclick="certEditRec('+r.id+')">改</button><button class="recbtn del" onclick="certDelRec('+r.id+')">刪</button>':'')
+          + '</div>';
+      }).join('') + '</div>';
+  }).join('') : '<div class="empty-hint">尚無紀錄</div>';
+}
+async function certDelRec(id){
+  var r=CERT_RECORDS.find(function(x){return x.id===id;}); if(!r)return;
+  var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?'}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
+  if(!confirm('確定刪除 '+e.name+' 的「'+c.name+' · 民國 '+r.year+'」？'))return;
+  var res=await sb.from('employee_certificates').delete().eq('id',id);
+  if(res.error){ cToast('刪除失敗：'+res.error.message); return; }
+  await certReloadRecords(); certRenderHrAdd(); cToast('已刪除');
+}
+var CERT_EDIT=null;
+function certEditRec(id){
+  CERT_EDIT=id; var r=CERT_RECORDS.find(function(x){return x.id===id;}); if(!r)return;
+  var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?'}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
+  document.getElementById('er-info').innerHTML=cEsc(e.name)+'（'+r.emp_no+'）<br>'+cEsc(c.name);
+  document.getElementById('er-year').value=r.year; document.getElementById('er-note').value=r.note||'';
+  document.getElementById('cert-editmodal').classList.add('show');
+}
+function certCloseEdit(){ document.getElementById('cert-editmodal').classList.remove('show'); CERT_EDIT=null; }
+async function certSaveEdit(){
+  if(CERT_EDIT===null)return;
+  var yr=parseInt(document.getElementById('er-year').value,10), nt=document.getElementById('er-note').value.trim();
+  if(!yr||yr<70||yr>120){ cToast('請填寫民國年份'); return; }
+  var res=await sb.from('employee_certificates').update({ obtained_year:yr, note:nt||null }).eq('id',CERT_EDIT);
+  if(res.error){ cToast(res.error.code==='23505'?'該同仁此項目此年份已存在':'更新失敗：'+res.error.message); return; }
+  certCloseEdit(); await certReloadRecords(); certRenderHrAdd(); cToast('已更新');
+}
+
+/* ── CSV 工具（UTF-8 BOM，Excel 開啟中文正常）── */
+function certCsvCell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function certDownloadCsv(fname, text){
+  var blob=new Blob(['\ufeff'+text], {type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── 人員管理：儲存職等/職級 ── */
+async function saveGradeLevel(btn){
+  var no=btn.dataset.empno;
+  var gi=document.querySelector('input[data-empno="'+no+'"][data-fld="grade"]');
+  var li=document.querySelector('input[data-empno="'+no+'"][data-fld="level"]');
+  var g=gi.value.trim(), l=li.value.trim();
+  var upd={ job_grade: g===''?null:parseInt(g,10), job_level: l===''?null:parseInt(l,10) };
+  var res=await sb.from('employees').update(upd).eq('emp_no', no);
+  if(res.error){ alert('儲存失敗：'+res.error.message); return; }
+  var orig=btn.textContent; btn.textContent='✓已存'; setTimeout(function(){ btn.textContent=orig; },1300);
+  var emp=allMgmtEmps.find(function(x){return x.emp_no===no;}); if(emp){ emp.job_grade=upd.job_grade; emp.job_level=upd.job_level; }
+  CERT_LOADED=false; // 證照統計/法規下次進入時重讀最新職等
+}
+
 </script>
 </body>
 </html>
