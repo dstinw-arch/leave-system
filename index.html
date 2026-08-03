@@ -533,6 +533,10 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <div id="p-review" class="page">
       <div class="page-title">證照審核</div>
       <div id="r-list"></div>
+      <div class="section-title" style="margin-top:1.4rem">更正已核可證照</div>
+      <div class="note">誤核可時可搜尋該同仁後更正該筆：「退回」會改為退回並 LINE 通知本人；「刪除」直接移除該筆、無法復原。</div>
+      <div class="filter-bar"><input id="rv-kw" placeholder="輸入員編或姓名搜尋" oninput="certSearchApproved()"></div>
+      <div id="rv-list"></div>
     </div>
 
     <div id="p-hradd" class="page">
@@ -1837,7 +1841,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v122 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v123 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2679,7 +2683,7 @@ function certGo(id, btn){
   CERT_PAGE=id;
   updateCertBadge();
   if(id==='p-mine') certRenderMine();
-  else if(id==='p-review') certRenderReview();
+  else if(id==='p-review'){ certRenderReview(); certSearchApproved(); }
   else if(id==='p-stat') certRenderStat();
   else if(id==='p-check') certRenderCheck();
   else if(id==='p-hradd') certRenderHrAdd();
@@ -2785,13 +2789,52 @@ async function certDoReview(ok){
   cToast(ok?'已核可，LINE 已通知 '+e.name:'已退回，LINE 已通知 '+e.name);
 }
 
+/* ── 更正已核可證照（HR）：兩顆按鈕 刪除／退回 ── */
+function certSearchApproved(){
+  var kw=(document.getElementById('rv-kw')?document.getElementById('rv-kw').value:'').trim();
+  var box=document.getElementById('rv-list'); if(!box)return;
+  if(!kw){ box.innerHTML='<div class="empty-hint" style="padding:1rem 0">輸入員編或姓名以查詢已核可證照</div>'; return; }
+  var recs=CERT_RECORDS.filter(function(r){ if(r.status!=='approved')return false; var e=CERT_EMP_BY_NO[r.emp_no]||{name:''}; return r.emp_no.indexOf(kw)>=0 || (e.name&&e.name.indexOf(kw)>=0); })
+    .sort(function(a,b){ return a.emp_no.localeCompare(b.emp_no) || b.year-a.year; });
+  if(!recs.length){ box.innerHTML='<div class="empty-hint" style="padding:1rem 0">查無符合的已核可證照</div>'; return; }
+  box.innerHTML=recs.map(function(r){ var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?',unit_name:''}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
+    return '<div class="cert-item approved"><div class="cert-head"><div class="cert-name">'+cEsc(e.name)+' · '+cEsc(c.name)+'</div><span class="badge badge-basic">已核可</span></div>'
+      +'<div class="cert-meta">'+r.emp_no+'　'+cEsc(e.unit_name)+'　民國 '+r.year+' 年'+(r.source==='hr'?'　(代建檔)':'')+'</div>'
+      +'<div class="cert-actions"><button class="recbtn edit" onclick="certRevokeReject('+r.id+')">退回並通知</button><button class="recbtn del" onclick="certRevokeDelete('+r.id+')">刪除</button></div></div>';
+  }).join('');
+}
+async function certRevokeDelete(id){
+  var r=CERT_RECORDS.find(function(x){return x.id===id;}); if(!r)return;
+  var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?'}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
+  if(!confirm('確定刪除 '+e.name+' 的「'+c.name+' · 民國 '+r.year+'」？此動作無法復原。'))return;
+  var res=await sb.from('employee_certificates').delete().eq('id',id);
+  if(res.error){ cToast('刪除失敗：'+res.error.message); return; }
+  await certReloadRecords(); certSearchApproved(); updateCertBadge(); cToast('已刪除 '+e.name+' 的該筆證照');
+}
+async function certRevokeReject(id){
+  var r=CERT_RECORDS.find(function(x){return x.id===id;}); if(!r)return;
+  var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?'}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
+  var reason=prompt('退回「'+c.name+'（民國 '+r.year+'）」的原因（會 LINE 通知 '+e.name+'）：','');
+  if(reason===null)return; reason=reason.trim();
+  if(!reason){ cToast('請填寫退回原因'); return; }
+  var res=await sb.from('employee_certificates').update({ status:'rejected', reviewed_by:currentUser.emp_no, reviewed_at:new Date().toISOString(), reject_reason:reason }).eq('id',id);
+  if(res.error){ cToast('退回失敗：'+res.error.message); return; }
+  notifyEmployee(r.emp_no, '【證照撤銷】原已核可的「'+c.name+'」（民國 '+r.year+' 年）經人資更正為退回，原因：'+reason);
+  await certReloadRecords(); certSearchApproved(); updateCertBadge(); cToast('已退回，LINE 已通知 '+e.name);
+}
+
 /* ── 統計（HR）── */
 function certInitStat(){
   var s=document.getElementById('s-unit'); if(!s)return;
   var units=[["7","管理部"],["16","營業部"],["25","水碓分社"],["34","竹圍分社"],["43","英專分社"],["52","義山分社"],["61","三芝分社"],["70","八里分社"],["89","成州分社"],["98","五股分社"],["104","萬金分社"],["113","新莊分社"],["122","泰山分社"],["131","林口分社"],["140","板橋分社"],["159","蘆洲分社"],["168","三重分社"]];
   s.innerHTML='<option value="">全部單位</option>'+units.map(function(u){return '<option value="'+u[1]+'">'+u[0].padStart(4,'0')+'　'+cEsc(u[1])+'</option>';}).join('');
 }
-function certUnitOrder(id){ var m={"7":1,"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17}; return m[id]||999; }
+function certUnitOrder(id){
+  id=String(id);
+  if(/^7(-|$)/.test(id)){ var mm=id.match(/^7-(\d+)$/); return 1 + (mm?parseInt(mm[1],10)/100:0); } // 管理部 7、7-01…7-XX
+  var m={"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17};
+  return m[id]||999;
+}
 function certRenderStat(){
   var unit=document.getElementById('s-unit').value, kw=document.getElementById('s-kw').value.trim(), sort=document.getElementById('s-sort').value;
   var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e, r:certCalc(e.emp_no)};});
