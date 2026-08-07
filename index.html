@@ -882,9 +882,8 @@ async function notifyProxy(r) {
   if (!pno || pno === r.emp_no) return;
   function md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
   var period = (r.start_date === r.end_date) ? md(r.start_date) : (md(r.start_date) + '～' + md(r.end_date));
-  var msg = '[代理通知] ' + r.emp_name + ' ' + period + ' 請' +
-    (r.leave_subtype || r.leave_type || '假') + ' ' + daysText(r) +
-    '，指定你為代理人（待審核）';
+  var msg = '[代理通知] 📣你被指定為職務代理人（請開啟系統查看）\n' +
+    '期間：' + period + '　天數：' + daysText(r);
   await notifyEmployee(pno, msg);
 }
 
@@ -1268,10 +1267,10 @@ async function doSubmitLeave() {
   if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
   // LINE 通知主管
   var _p = halfPeriodDetail(startDate, endDate, days, startTime, endTime);
-  var leaveMsg = '[請假通知] ' + emp.name + ' 申請 ' + type + subtype + '\n' +
-    '期間：' + startDate + (days > 0.5 ? ' ~ ' + endDate : '') + '\n' +
-    '天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '') + '\n' +
-    '事由：' + reason;
+  function _md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
+  var leaveMsg = '[請假通知]📣 有一筆假單待審核（請開啟系統查看）\n' +
+    '期間：' + _md(startDate) + (days > 0.5 ? ' ~ ' + _md(endDate) : '') +
+    '　天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '');
   await notifyManager(emp, leaveMsg);
   await notifyProxy(insertData);
   alert('✅ 假單已送出，等待審核');
@@ -1478,9 +1477,7 @@ async function approveAllLeaves(src) {
         status: 'pending', reviewer_type: 'gm',
         mgr_approved_by: currentUser.name, reviewed_by: null, reviewed_at: null
       }).eq('id', r.id);
-      var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
-        '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
-        '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
+      var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
       await notifyGM(gmMsg);
     } else {
       var docNo = r.doc_no || await getNextDocNo();
@@ -1712,9 +1709,7 @@ async function approveLeave() {
       reviewed_by: null,
       reviewed_at: null
     }).eq('id', r.id);
-    var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
-      '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
+    var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
     await notifyGM(gmMsg);
   } else {
     // <3天 或 總經理/理事主席核准：直接核准並通知員工
@@ -1842,7 +1837,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v125 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v126 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1977,9 +1972,7 @@ async function calApprove(id) {
       mgr_approved_by: currentUser.name,
       reviewed_by: null, reviewed_at: null
     }).eq('id', id);
-    var gmMsg = '[請假待審] ' + r.emp_name + ' 申請 ' + r.leave_type + (r.leave_subtype||'') + '\n' +
-      '期間：' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      '天數：' + r.days + ' 天（已獲主管 ' + currentUser.name + ' 核准，請您審核）';
+    var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
     await notifyGM(gmMsg);
   } else {
     var docNo = r.doc_no || await getNextDocNo();
