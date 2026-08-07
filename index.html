@@ -1484,8 +1484,7 @@ async function approveAllLeaves(src) {
       await sb.from('leave_requests').update({
         status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
       }).eq('id', r.id);
-      await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅\n' +
-        r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' + daysText(r));
+      await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅');
     }
   }
   if (src==='gm') loadGmReview();
@@ -1717,9 +1716,7 @@ async function approveLeave() {
     await sb.from('leave_requests').update({
       status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', r.id);
-    var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
-      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      daysText(r);
+    var empMsg = '[請假結果] 您的假單已核准 ✅';
     await notifyEmployee(r.emp_no, empMsg);
   }
   if (currentReviewSource==='gm') loadGmReview();
@@ -1837,7 +1834,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v128 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v130 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -1979,9 +1976,7 @@ async function calApprove(id) {
     await sb.from('leave_requests').update({
       status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', id);
-    var empMsg = '[請假結果] 您的假單已核准 ✅\n' +
-      r.leave_type + (r.leave_subtype||'') + ' ' + r.start_date + ' ~ ' + r.end_date + '\n' +
-      daysText(r);
+    var empMsg = '[請假結果] 您的假單已核准 ✅';
     await notifyEmployee(r.emp_no, empMsg);
   }
   await loadCalendar();
