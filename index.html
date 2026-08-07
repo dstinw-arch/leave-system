@@ -1837,7 +1837,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v126 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v128 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2745,7 +2745,7 @@ async function certSubmit(){
   var ins=await sb.from('employee_certificates').insert({ emp_no:me.emp_no, certificate_id:parseInt(id,10), cert_no:no, obtained_year:yr, status:'pending', source:'self' });
   if(ins.error){ cToast(ins.error.code==='23505'?'這張證照（同年份）你已登錄過':'送出失敗：'+ins.error.message); return; }
   // LINE 通知人資（固定葉芷娟，不通知王譽婷）
-  var msg='【證照登錄待審】'+me.name+'（'+(me.unit_name||'')+'）登錄「'+c.name+'」，取得年份 民國 '+yr+' 年。請至請假系統 › 證照 › 審核 進行查證。';
+  var msg='【證照登錄待審】📣 有一筆證照登錄待查證';
   notifyEmployee(CERT_HR_EMP_NO, msg);
   document.getElementById('f-preview').innerHTML='<div class="linebox"><b>已送出，LINE 通知已發給 葉芷娟（人資）</b><br>'+cEsc(msg)+'</div>';
   document.getElementById('f-cert').value=''; document.getElementById('f-year').value=''; document.getElementById('f-no').value=''; document.getElementById('f-tier').textContent='';
@@ -2779,7 +2779,7 @@ async function certDoReview(ok){
   var upd={ status: ok?'approved':'rejected', reviewed_by: currentUser.emp_no, reviewed_at: new Date().toISOString(), reject_reason: ok?null:reason };
   var res=await sb.from('employee_certificates').update(upd).eq('id',p.id);
   if(res.error){ cToast('更新失敗：'+res.error.message); return; }
-  var msg = ok ? '【證照核可】你登錄的「'+c.name+'」（民國 '+p.year+' 年）已由人資核可。'
+  var msg = ok ? '【證照核可】⭐證照已由人資核可⭐'
               : '【證照退回】你登錄的「'+c.name+'」（民國 '+p.year+' 年）未通過，原因：'+reason;
   notifyEmployee(p.emp_no, msg);
   certCloseModal(); await certReloadRecords(); certRenderReview(); updateCertBadge();
