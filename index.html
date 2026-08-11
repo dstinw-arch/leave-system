@@ -1843,7 +1843,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v132 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v133 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2434,7 +2434,12 @@ async function addEmployee() {
   var parts = unitVal.split('|');
   var res = await sb.from('employees').insert({ emp_no:empNo, name:name, unit_id:parts[0], unit_name:parts[1], title:title, annual_leave_days:days, used_leave_days:0, is_manager:false, is_hr:false, is_gm:false, is_active:true });
   if (res.error) { errEl.textContent = res.error.code==='23505'?'此員工編號已存在':'新增失敗：'+res.error.message; errEl.style.display='block'; return; }
-  alert('✅ 已新增 '+name+'，初始密碼為員工編號');
+  var prov = await sb.functions.invoke('hr-admin', { body:{ action:'provision', emp_no: empNo } });
+  if (prov.error || !prov.data || prov.data.ok === false) {
+    alert('⚠ 員工資料已新增，但登入帳號建立失敗：'+(prov.error ? prov.error.message : (prov.data && prov.data.error) || '未知錯誤')+'\n請在人員列表按該員的「重設密碼」再建立一次。');
+  } else {
+    alert('✅ 已新增 '+name+'，登入帳號已建立，初始密碼為員工編號');
+  }
   ['new-emp-name','new-emp-no','new-emp-title','new-emp-days'].forEach(function(id){ document.getElementById(id).value=''; });
   CERT_LOADED = false; // 新增員工 → 證照統計下次重讀
   loadHrMgmt();
@@ -2493,9 +2498,9 @@ async function resetPw(btn) {
   var empNo = btn.dataset.empno;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
   if (!confirm('確定要將 '+emp.name+' 的密碼重設為員工編號？')) return;
-  const { error }=await sb.from('employees').update({ pw_hash:null }).eq('emp_no', empNo);
-  if (error) { alert('重設失敗：'+error.message); return; }
-  alert('✅ 密碼已重設為員工編號（下次登入用編號登入即可）');
+  const { data, error } = await sb.functions.invoke('hr-admin', { body:{ action:'provision', emp_no: empNo } });
+  if (error || !data || data.ok === false) { alert('重設失敗：'+(error ? error.message : (data && data.error) || '未知錯誤')); return; }
+  alert('✅ '+(data.message || '密碼已重設為員工編號')+'（該員下次用員工編號登入並重新設定密碼）');
 }
 
 
