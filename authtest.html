@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登入測試</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<body style="font-family:system-ui,sans-serif;padding:20px;max-width:480px;margin:0 auto;line-height:1.7">
+  <h3>Supabase 登入測試（獨立、無快取）</h3>
+  <p>員工編號<br><input id="e" value="1112009" style="width:100%;padding:8px;font-size:16px"></p>
+  <p>密碼（預設為員工編號）<br><input id="p" value="1112009" style="width:100%;padding:8px;font-size:16px"></p>
+  <button onclick="go()" style="padding:10px 18px;font-size:16px;cursor:pointer">測試登入</button>
+  <pre id="out" style="white-space:pre-wrap;background:#f4f4f4;padding:12px;margin-top:14px;border-radius:8px"></pre>
+
+  <script>
+    const SUPABASE_URL = 'https://nloegbeggwyprtqickqs.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function go() {
+      const out = document.getElementById('out');
+      out.textContent = '測試中…';
+      const empno = document.getElementById('e').value.trim();
+      const pw = document.getElementById('p').value;
+      const email = empno + '@tsc1918.local';
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+        if (error) {
+          out.textContent =
+            '❌ 登入失敗\n\n' +
+            'status: ' + error.status + '\n' +
+            'code: ' + (error.code || '(無)') + '\n' +
+            'message: ' + error.message + '\n\n' +
+            '👉 請把這整段截圖給我。';
+        } else {
+          out.textContent =
+            '✅ 登入成功！\n\n' +
+            'user id: ' + data.user.id + '\n' +
+            'email: ' + data.user.email + '\n\n' +
+            '代表 Supabase 後端與帳號都正常，\n問題出在你正式站的前端或快取（我們再處理部署/清快取即可）。';
+          await sb.auth.signOut();
+        }
+      } catch (e) {
+        out.textContent = '⚠️ 例外錯誤：\n' + (e && e.message ? e.message : String(e)) + '\n\n請截圖給我。';
+      }
+    }
+  </script>
+</body>
+</html>
