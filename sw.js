@@ -1,4 +1,4 @@
-const CACHE_NAME = 'leave-system-v131';
+const CACHE_NAME = 'leave-system-v132';
 const ASSETS = [
   '/leave-system/',
   '/leave-system/index.html',

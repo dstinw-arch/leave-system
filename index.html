@@ -150,7 +150,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .empty-hint { text-align:center; color:var(--muted); font-size:13px; padding:2rem 0; }
 
 /* ═══════════ 證照模組樣式 v120 ═══════════ */
-.topbar-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.modtabs{display:flex;gap:20px;flex-shrink:0}.modtabs button{position:relative;display:inline-flex;align-items:center;gap:5px;
+.topbar-row{display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;margin-bottom:14px}.modtabs{display:flex;gap:20px;flex-shrink:0}.modtabs button{position:relative;display:inline-flex;align-items:center;gap:5px;
   border:none;background:none;padding:0 0 7px;cursor:pointer;
   font-family:inherit;font-size:15.5px;font-weight:500;letter-spacing:.6px;
   color:rgba(255,255,255,.5);transition:color .22s ease}.modtabs button.on{color:#fff;font-weight:700}.modtabs button::after{content:"";position:absolute;left:50%;bottom:0;height:2.5px;width:0;
@@ -1843,7 +1843,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v131 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v132 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2893,7 +2893,7 @@ function certRenderCheck(){
   var body=emps.map(function(e){
     var has={}; CERT_RECORDS.filter(function(r){return r.emp_no===e.emp_no && r.status==='approved';}).forEach(function(r){ if(has[r.certificate_id]==null||r.year>has[r.certificate_id]) has[r.certificate_id]=r.year; });
     var cells=sel.map(function(id){ if(has[id]!=null) return '<td class="num yes">'+has[id]+'</td>'; miss++; return '<td class="num no">✕</td>'; }).join('');
-    return '<tr><td>'+String(e.unit_id).padStart(4,'0')+' '+cEsc(e.unit_name)+'</td><td>'+e.emp_no+'</td><td>'+cEsc(e.name)+'</td><td class="num">'+e.grade+'</td>'+cells+'</tr>';
+    return '<tr><td>'+String(e.unit_id).padStart(4,'0')+' '+cEsc(e.unit_name)+'</td><td>'+e.emp_no+'</td><td>'+cEsc(maskName(e.name))+'</td><td class="num">'+e.grade+'</td>'+cells+'</tr>';
   }).join('');
   document.getElementById('c-total').textContent=emps.length;
   document.getElementById('c-miss').textContent=miss;
