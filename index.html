@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="apple-touch-icon" sizes="192x192" href="icon-192x192.png">
-<title>淡水信用合作社 請假系統</title>
+<title>請假系統</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -165,9 +165,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   <div class="login-card">
     <div class="login-hero">
       <div class="login-hero-inner">
-        <div class="login-brand">新北市淡水信用合作社</div>
         <div class="login-title">員工請假系統</div>
-        <div class="login-sub">Employee Leave Management</div>
       </div>
     </div>
     <div class="form-group">
@@ -206,13 +204,12 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   <div class="topbar">
     <div class="topbar-inner">
       <div class="topbar-row">
-        <div class="topbar-brand">新北市淡水信用合作社</div>
         <div class="modtabs">
           <button id="ms-leave" class="on" onclick="switchModule('leave')">請假</button>
           <button id="ms-cert" onclick="switchModule('cert')">證照<span class="modcount" id="ms-badge" style="display:none">0</span></button>
         </div>
       </div>
-      <div class="topbar-title" id="topbar-title">員工請假系統</div>
+      <div class="topbar-title" id="topbar-title">請假系統</div>
       <div class="topbar-user">
         <div class="topbar-avatar" id="topbar-avatar">？</div>
         <div class="topbar-user-text">
@@ -685,6 +682,15 @@ async function hashPw(pw) {
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// 姓名遮罩：僅供畫面顯示，嚴禁用於報表匯出或寫入資料庫
+function maskName(n){
+  n = (n==null?'':String(n));
+  var a = Array.from(n);
+  if (a.length <= 1) return n;
+  if (a.length === 2) return a[0] + 'O';
+  return a[0] + 'O'.repeat(a.length - 2) + a[a.length-1];
+}
+
 async function doLogin() {
   var empno = document.getElementById('login-empno').value.trim();
   // 6碼自動補0變7碼
@@ -693,22 +699,24 @@ async function doLogin() {
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
   if (!empno || !pw) { errEl.textContent='請填寫員工編號與密碼'; errEl.style.display='block'; return; }
+  // 以 Supabase 原生登入驗證（密碼由後端加鹽保管，前端不接觸雜湊）
+  const email = empno + '@tsc1918.local';
+  const { error: authErr } = await sb.auth.signInWithPassword({ email: email, password: pw });
+  if (authErr) { errEl.textContent='員工編號或密碼錯誤'; errEl.style.display='block'; return; }
   const { data, error } = await sb.from('employees').select('*').eq('emp_no', empno).single();
-  if (error || !data) { errEl.textContent='找不到此員工編號'; errEl.style.display='block'; return; }
-  if (data.is_active === false) { errEl.textContent='此帳號已停用，請聯絡人事部門'; errEl.style.display='block'; return; }
-  const hash = await hashPw(pw);
-  const checkPw = data.pw_hash || localStorage.getItem('pw_' + empno) || await hashPw(empno);
-  if (hash !== checkPw) { errEl.textContent='密碼錯誤'; errEl.style.display='block'; return; }
+  if (error || !data) { errEl.textContent='找不到此員工資料，請聯絡人事部門'; errEl.style.display='block'; await sb.auth.signOut(); return; }
+  if (data.is_active === false) { errEl.textContent='此帳號已停用，請聯絡人事部門'; errEl.style.display='block'; await sb.auth.signOut(); return; }
   currentUser = data;
-  document.getElementById('topbar-name').textContent = data.name;
+  document.getElementById('topbar-name').textContent = maskName(data.name);
   document.getElementById('topbar-unit').textContent = data.unit_name;
   document.getElementById('topbar-avatar').textContent = (data.name || '？').charAt(0);
-  document.getElementById('set-name').textContent = data.name;
+  document.getElementById('set-name').textContent = maskName(data.name);
   document.getElementById('set-empno').textContent = data.emp_no;
   document.getElementById('set-unit').textContent = data.unit_name;
   document.getElementById('set-title').textContent = data.title;
   document.getElementById('page-login').style.display = 'none';
   document.getElementById('page-app').style.display = 'block';
+  if (data.must_change_pw) { document.getElementById('page-changepw').classList.add('show'); return; }
   initApp();
 }
 
@@ -719,16 +727,17 @@ async function doChangePw() {
   err.style.display = 'none';
   if (pw1.length < 6) { err.textContent='密碼至少6位'; err.style.display='block'; return; }
   if (pw1 !== pw2) { err.textContent='兩次密碼不一致'; err.style.display='block'; return; }
-  const newHash = await hashPw(pw1);
-  const { error } = await sb.from('employees').update({ pw_hash: newHash }).eq('emp_no', currentUser.emp_no);
+  if (pw1 === currentUser.emp_no) { err.textContent='新密碼不可與員工編號相同'; err.style.display='block'; return; }
+  const { error } = await sb.auth.updateUser({ password: pw1 });
   if (error) { err.textContent='密碼更新失敗：'+error.message; err.style.display='block'; return; }
-  currentUser.pw_hash = newHash;
-  localStorage.removeItem('pw_' + currentUser.emp_no);
+  await sb.from('employees').update({ must_change_pw: false }).eq('emp_no', currentUser.emp_no);
+  currentUser.must_change_pw = false;
   document.getElementById('page-changepw').classList.remove('show');
   initApp();
 }
 
-function doLogout() {
+async function doLogout() {
+  await sb.auth.signOut();
   currentUser = null;
   document.getElementById('page-app').style.display = 'none';
   document.getElementById('page-login').style.display = 'flex';
@@ -988,8 +997,8 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   var statusMap = { pending:'待審核', approved:'已核准', rejected:'已拒絕' };
   var badgeMap = { pending:'badge-pending', approved:'badge-approved', rejected:'badge-rejected' };
   var namePrefix = '';
-  if (isHr) namePrefix = '[' + r.unit_name + '] ' + r.emp_name + ' · ';
-  else if (isGm || isMgr) namePrefix = r.emp_name + ' · ';
+  if (isHr) namePrefix = '[' + r.unit_name + '] ' + maskName(r.emp_name) + ' · ';
+  else if (isGm || isMgr) namePrefix = maskName(r.emp_name) + ' · ';
   var canReview = (isMgr || isGm || isHr) && r.status === 'pending' && (!currentUser || r.emp_no !== currentUser.emp_no);
   var src = (isGm && currentUser && currentUser.emp_no === CHAIRMAN_EMP_NO) ? 'chairman' : isGm ? 'gm' : (isHr ? 'hr' : 'unit');
   var reviewBtn = canReview ? "<button class=\"btn-sm btn-approve\" onclick=\"openReview('" + r.id + "','" + src + "')\" >審核</button>" : '';
@@ -1039,7 +1048,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
     '<div class="leave-meta">' +
       r.start_date + ' ～ ' + r.end_date + '（' + daysText(r) + '）<br>' +
       '事由：' + (r.reason||'—') + '<br>' +
-      '代理人：' + (r.proxy_name||'—') + (r.proxy_duty ? '（' + r.proxy_duty + '）' : '') +
+      '代理人：' + (r.proxy_name?maskName(r.proxy_name):'—') + (r.proxy_duty ? '（' + r.proxy_duty + '）' : '') +
       (r.status==='rejected' && r.reject_reason ? '<br>拒絕原因：' + r.reject_reason : '') +
     '</div>' +
     flowHtml +
@@ -1448,13 +1457,13 @@ function openReview(id, src) {
   const pool = (src==='gm'||src==='chairman') ? allGmLeaves : src==='hr' ? allHrLeaves : allUnitLeaves;
   const r = pool.find(x=>x.id===id);
   if (!r) return;
-  document.getElementById('modal-review-title').textContent = `審核：${r.emp_name} 的假單`;
+  document.getElementById('modal-review-title').textContent = `審核：${maskName(r.emp_name)} 的假單`;
   document.getElementById('modal-review-body').innerHTML =
     `單位：${r.unit_name}<br>假別：${r.leave_type} — ${r.leave_subtype}<br>
      日期：${r.start_date} ～ ${r.end_date}（${r.days} 天）<br>
      時間：${r.start_time||'—'} ～ ${r.end_time||'—'}<br>
      事由：${r.reason||'—'}<br>
-     代理人：${r.proxy_name||'—'}${r.proxy_duty?'（'+r.proxy_duty+'）':''}`;
+     代理人：${r.proxy_name?maskName(r.proxy_name):'—'}${r.proxy_duty?'（'+r.proxy_duty+'）':''}`;
   document.getElementById('modal-reject-reason').value = '';
   document.getElementById('modal-review').classList.add('show');
 }
@@ -1565,7 +1574,7 @@ function renderAnnualOverview() {
       var bg = i % 2 === 0 ? '' : 'background:#f8faf8;';
       var remainColor = remain < 0 ? 'color:#e74c3c;font-weight:700;' : remain <= 3 ? 'color:#e67e22;font-weight:600;' : 'color:var(--primary);font-weight:600;';
       html += '<tr style="'+bg+'">' +
-        '<td style="padding:7px 10px;font-size:14px;">'+e.name+'</td>' +
+        '<td style="padding:7px 10px;font-size:14px;">'+maskName(e.name)+'</td>' +
         '<td style="padding:7px 6px;text-align:center;font-size:14px;">'+total+'</td>' +
         '<td style="padding:7px 6px;text-align:center;font-size:14px;">'+used+'</td>' +
         '<td style="padding:7px 6px;text-align:center;font-size:14px;'+remainColor+'">'+remain+'</td>' +
@@ -1908,7 +1917,7 @@ function showCalDay(ds) {
       var color = getLeaveColor(r.leave_type);
       var statusMap = {pending:'待審核',approved:'已核准',rejected:'已拒絕'};
       var badgeMap = {pending:'badge-pending',approved:'badge-approved',rejected:'badge-rejected'};
-      var namePrefix = isMgrView ? r.emp_name+' · ' : '';
+      var namePrefix = isMgrView ? maskName(r.emp_name)+' · ' : '';
       // 判斷這張假單是否在當前使用者的審核權限範圍內
       var canReview = false;
       if (isMgrView && !isMgmtStaff && r.status === 'pending' && r.emp_no !== currentUser.emp_no) {
@@ -1936,7 +1945,7 @@ function showCalDay(ds) {
         : '';
       return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
-        '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name||'—')+'</div>' +
+        '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name?maskName(r.proxy_name):'—')+'</div>' +
         reviewBtns + '</div>';
     }).join('');
   }
@@ -1945,7 +1954,7 @@ function showCalDay(ds) {
     out += myProxies.map(function(r) {
       var color = getLeaveColor(r.leave_type);
       return '<div class="leave-item approved" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
-        '<div class="leave-header"><div class="leave-name">'+r.emp_name+' 請假</div><span class="leave-badge" style="background:#f39c12;color:#fff">代理中</span></div>' +
+        '<div class="leave-header"><div class="leave-name">'+maskName(r.emp_name)+' 請假</div><span class="leave-badge" style="background:#f39c12;color:#fff">代理中</span></div>' +
         '<div class="leave-meta">'+r.leave_type+' — '+r.leave_subtype+'（'+daysText(r)+'）<br>擔任事務：'+(r.proxy_duty||'—')+'</div></div>';
     }).join('');
   }
@@ -2001,16 +2010,15 @@ async function doSettingChangePw() {
   const pw2=document.getElementById('set-new-pw2').value;
   const err=document.getElementById('set-pw-error');
   err.style.display='none';
-  const oldHash=await hashPw(oldPw);
-  const stored=currentUser.pw_hash||localStorage.getItem('pw_'+currentUser.emp_no)||await hashPw(currentUser.emp_no);
-  if (oldHash!==stored) { err.textContent='目前密碼錯誤'; err.style.display='block'; return; }
   if (pw1.length<6) { err.textContent='新密碼至少6位'; err.style.display='block'; return; }
   if (pw1!==pw2) { err.textContent='兩次密碼不一致'; err.style.display='block'; return; }
-  const newHash=await hashPw(pw1);
-  const { error:upErr }=await sb.from('employees').update({ pw_hash:newHash }).eq('emp_no', currentUser.emp_no);
+  if (pw1===currentUser.emp_no) { err.textContent='新密碼不可與員工編號相同'; err.style.display='block'; return; }
+  const email=currentUser.emp_no+'@tsc1918.local';
+  const { error:reErr }=await sb.auth.signInWithPassword({ email:email, password:oldPw });
+  if (reErr) { err.textContent='目前密碼錯誤'; err.style.display='block'; return; }
+  const { error:upErr }=await sb.auth.updateUser({ password:pw1 });
   if (upErr) { err.textContent='密碼更新失敗：'+upErr.message; err.style.display='block'; return; }
-  currentUser.pw_hash=newHash;
-  localStorage.removeItem('pw_'+currentUser.emp_no);
+  await sb.from('employees').update({ must_change_pw:false }).eq('emp_no', currentUser.emp_no);
   alert('✅ 密碼已更新');
   ['set-old-pw','set-new-pw1','set-new-pw2'].forEach(id=>document.getElementById(id).value='');
 }
@@ -2389,7 +2397,7 @@ function empMgmtItemHtml(e) {
 
   return '<div data-empno="'+e.emp_no+'" style="background:#fff;border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;box-shadow:0 1px 4px rgba(0,0,0,.06);'+(isActive?'':'opacity:.55;')+'">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">' +
-      '<div><span style="font-size:14px;font-weight:600;">'+e.name+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;">'+e.emp_no+'</span><br>' +
+      '<div><span style="font-size:14px;font-weight:600;">'+maskName(e.name)+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;">'+e.emp_no+'</span><br>' +
       '<span style="font-size:11px;color:var(--muted);">'+e.unit_name+' · '+(e.title||'')+'</span></div>' +
       '<div>'+statusBadge+mgmtBadge+subMgrBadge+hrBadge+gmBadge+'</div>' +
     '</div>' +
@@ -2642,7 +2650,7 @@ async function switchModule(m){
   CERT_MODULE = m;
   document.getElementById('ms-leave').classList.toggle('on', m==='leave');
   document.getElementById('ms-cert').classList.toggle('on', m==='cert');
-  var tt=document.getElementById('topbar-title'); if(tt) tt.textContent = (m==='cert'?'員工證照系統':'員工請假系統');
+  var tt=document.getElementById('topbar-title'); if(tt) tt.textContent = (m==='cert'?'證照系統':'請假系統');
   if(m==='leave'){
     buildNav();
     showPage('emp-home', document.getElementById('bnav-emp-home'));
@@ -2752,7 +2760,7 @@ var CERT_CUR=null;
 function certRenderReview(){
   var pend=CERT_RECORDS.filter(function(r){return r.status==='pending';}).sort(function(a,b){return a.id-b.id;});
   document.getElementById('r-list').innerHTML = pend.length ? pend.map(function(p){ var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?',unit_name:'',title:''}, c=CERT_BY_ID[p.certificate_id]||{name:'?',tier:'none'};
-    return '<div class="cert-item pending"><div class="cert-head"><div class="cert-name">'+cEsc(e.name)+' · '+cEsc(c.name)+'</div><span class="badge badge-pending">待審核</span></div>'
+    return '<div class="cert-item pending"><div class="cert-head"><div class="cert-name">'+cEsc(maskName(e.name))+' · '+cEsc(c.name)+'</div><span class="badge badge-pending">待審核</span></div>'
       +'<div class="cert-meta">員編單位　'+p.emp_no+'　'+cEsc(e.unit_name)+' '+cEsc(e.title)+'<br>取得年份　民國 '+p.year+' 年　'+certTierBadge(c.tier)+'<br>證　　號　<b>'+cEsc(p.cert_no||'—')+'</b></div>'
       +'<div class="cert-actions"><button class="btn-sm btn-approve" onclick="certOpenReview('+p.id+')">查證並審核</button></div></div>';
   }).join('') : '<div class="empty-hint">目前沒有待審核的證照登錄</div>';
@@ -2760,7 +2768,7 @@ function certRenderReview(){
 function certOpenReview(id){
   CERT_CUR=id; var p=CERT_RECORDS.find(function(r){return r.id===id;}); if(!p)return;
   var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?',unit_name:'',title:''}, c=CERT_BY_ID[p.certificate_id]||{name:'?'};
-  document.getElementById('cert-mo-body').innerHTML='申請人　'+cEsc(e.name)+'（'+p.emp_no+'）<br>單　位　'+cEsc(e.unit_name)+' '+cEsc(e.title)+'<br>證　照　'+cEsc(c.name)+'<br>取得年份　民國 '+p.year+' 年<br>證　號　<b>'+cEsc(p.cert_no||'—')+'</b><div class="note" style="margin:.7rem 0 0">請先至發證機關網站以證號查證，確認為真後再核可。核可後此證號不會出現在任何報表。</div>';
+  document.getElementById('cert-mo-body').innerHTML='申請人　'+cEsc(maskName(e.name))+'（'+p.emp_no+'）<br>單　位　'+cEsc(e.unit_name)+' '+cEsc(e.title)+'<br>證　照　'+cEsc(c.name)+'<br>取得年份　民國 '+p.year+' 年<br>證　號　<b>'+cEsc(p.cert_no||'—')+'</b><div class="note" style="margin:.7rem 0 0">請先至發證機關網站以證號查證，確認為真後再核可。核可後此證號不會出現在任何報表。</div>';
   document.getElementById('cert-mo-reason').value='';
   document.getElementById('cert-modal').classList.add('show');
 }
@@ -2790,7 +2798,7 @@ function certSearchApproved(){
     .sort(function(a,b){ return a.emp_no.localeCompare(b.emp_no) || b.year-a.year; });
   if(!recs.length){ box.innerHTML='<div class="empty-hint" style="padding:1rem 0">查無符合的已核可證照</div>'; return; }
   box.innerHTML=recs.map(function(r){ var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?',unit_name:''}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
-    return '<div class="cert-item approved"><div class="cert-head"><div class="cert-name">'+cEsc(e.name)+' · '+cEsc(c.name)+'</div><span class="badge badge-basic">已核可</span></div>'
+    return '<div class="cert-item approved"><div class="cert-head"><div class="cert-name">'+cEsc(maskName(e.name))+' · '+cEsc(c.name)+'</div><span class="badge badge-basic">已核可</span></div>'
       +'<div class="cert-meta">'+r.emp_no+'　'+cEsc(e.unit_name)+'　民國 '+r.year+' 年'+(r.source==='hr'?'　(代建檔)':'')+'</div>'
       +'<div class="cert-actions"><button class="recbtn edit" onclick="certRevokeReject('+r.id+')">退回並通知</button><button class="recbtn del" onclick="certRevokeDelete('+r.id+')">刪除</button></div></div>';
   }).join('');
@@ -2850,7 +2858,7 @@ function certRenderStat(){
   document.getElementById('s-list').innerHTML=out;
 }
 function certRowHtml(x){ var e=x.e, r=x.r, leave=CERT_ONLEAVE.has(e.emp_no);
-  return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(e.name)+'<span class="pmeta">'+cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
+  return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(maskName(e.name))+'<span class="pmeta">'+cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
 }
 function certExportStat(){
   var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e,r:certCalc(e.emp_no)};})
@@ -2866,7 +2874,7 @@ function certExportStat(){
 /* ── 法規查詢（HR）── */
 var CERT_SELCHECK=new Set();
 function certInitCheck(){
-  var defaults=['曾擔任內部稽核人員一年以上','參加過淡信舉辦之稽核訓練','參加過實習查帳','防制洗錢及打擊資恐人員職前研習班','法令遵循人員職前研習班','銀行內部控制與內部稽核(一般)'];
+  var defaults=['曾擔任內部稽核人員一年以上','參加過本社舉辦之稽核訓練','參加過實習查帳','防制洗錢及打擊資恐人員職前研習班','法令遵循人員職前研習班','銀行內部控制與內部稽核(一般)'];
   var wrap=document.getElementById('c-chips'); if(!wrap)return; wrap.innerHTML=''; CERT_SELCHECK=new Set();
   CERT_MASTER.forEach(function(c){
     if(defaults.indexOf(c.name)<0 && c.category!=='訓練經歷' && c.tier==='none') return;
@@ -2932,7 +2940,7 @@ function certRenderHrAdd(){
   document.getElementById('h-list').innerHTML = keys.length ? keys.map(function(k){ var g=groups[k];
     return '<div class="ugroup"><div class="uhead"><span class="uname">'+cEsc(k)+'</span><span class="usum">'+g.length+' 人</span></div>'
       + g.map(function(r){ var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?',unit_name:''};
-        return '<div class="prow"><div class="pname">'+cEsc(e.name)+'<span class="pmeta">'+cEsc(e.unit_name)+' · 民國 '+r.year+(r.note?' · '+cEsc(r.note):'')+'</span></div>'
+        return '<div class="prow"><div class="pname">'+cEsc(maskName(e.name))+'<span class="pmeta">'+cEsc(e.unit_name)+' · 民國 '+r.year+(r.note?' · '+cEsc(r.note):'')+'</span></div>'
           + (CERT_EDITMODE?'<button class="recbtn edit" onclick="certEditRec('+r.id+')">改</button><button class="recbtn del" onclick="certDelRec('+r.id+')">刪</button>':'')
           + '</div>';
       }).join('') + '</div>';
@@ -2950,7 +2958,7 @@ var CERT_EDIT=null;
 function certEditRec(id){
   CERT_EDIT=id; var r=CERT_RECORDS.find(function(x){return x.id===id;}); if(!r)return;
   var e=CERT_EMP_BY_NO[r.emp_no]||{name:'?'}, c=CERT_BY_ID[r.certificate_id]||{name:'?'};
-  document.getElementById('er-info').innerHTML=cEsc(e.name)+'（'+r.emp_no+'）<br>'+cEsc(c.name);
+  document.getElementById('er-info').innerHTML=cEsc(maskName(e.name))+'（'+r.emp_no+'）<br>'+cEsc(c.name);
   document.getElementById('er-year').value=r.year; document.getElementById('er-note').value=r.note||'';
   document.getElementById('cert-editmodal').classList.add('show');
 }
