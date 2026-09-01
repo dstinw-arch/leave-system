@@ -1843,7 +1843,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v134 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v135 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2460,12 +2460,33 @@ async function changeUnit(sel) {
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
   var parts = sel.value.split('|');
   var newUnitId = parts[0], newUnitName = parts[1];
-  if (!confirm('確定將 '+emp.name+' 的單位改為「'+newUnitName+'」？\n主管旗標將會清除，歷史假單也會一併搬移。')) { loadHrMgmt(); return; }
-  // 更新員工資料
+  var oldUnitId = emp.unit_id, oldUnitName = emp.unit_name;
+  var wasManager = !!emp.is_manager;
+
+  var msg = '確定將 '+emp.name+' 的單位由「'+oldUnitName+'」改為「'+newUnitName+'」？\n\n'
+          + '• 歷史假單不會變動，仍留在當時的單位（與紙本一致）';
+  if (wasManager) {
+    msg += '\n\n⚠️ '+emp.name+' 目前是「'+oldUnitName+'」的主管，換單位後主管旗標會被清除。\n'
+         + '換完請務必到「'+newUnitName+'」重新勾選「主管」，\n'
+         + '否則該單位的假單不會發 LINE 通知，主管也看不到審核頁籤。';
+  }
+  if (!confirm(msg)) { loadHrMgmt(); return; }
+
+  // 只更新員工資料；歷史假單一律不動（金檢需與紙本一致）
   await sb.from('employees').update({unit_id:newUnitId, unit_name:newUnitName, is_manager:false}).eq('emp_no', empNo);
-  // 歷史假單一併搬移
-  await sb.from('leave_requests').update({unit_id:newUnitId, unit_name:newUnitName}).eq('emp_no', empNo);
-  alert('✅ 單位已更新，歷史假單也已搬移至'+newUnitName+'');
+
+  var doneMsg = '✅ '+emp.name+' 的單位已改為'+newUnitName+'\n（歷史假單維持在'+oldUnitName+'，未變動）';
+  if (wasManager) {
+    doneMsg += '\n\n⚠️ 主管旗標已清除，請現在到「'+newUnitName+'」勾選「主管」。';
+    // 原單位是否還有主管？沒有就提醒
+    var oldStillHasMgr = allMgmtEmps.some(function(e){
+      return e.unit_id===oldUnitId && e.is_manager && e.emp_no!==empNo && e.is_active;
+    });
+    if (!oldStillHasMgr) {
+      doneMsg += '\n⚠️ 「'+oldUnitName+'」目前已沒有主管，請儘快指定新主管。';
+    }
+  }
+  alert(doneMsg);
   CERT_LOADED = false; // 換單位 → 證照統計下次重讀
   loadHrMgmt();
 }
