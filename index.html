@@ -456,8 +456,9 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem;">
             <input id="new-emp-days" type="number" placeholder="年度特休天數" step="0.5" min="0" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;" />
-            <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;">初始密碼為員工編號</div>
+            <input id="new-emp-hire" type="date" title="到職日" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;background:#fff;" />
           </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem;">初始密碼為員工編號；試用期人員特休請填 0，到職日請務必填寫（年度特休批次計算會跳過無到職日的人）。</div>
           <div id="new-emp-error" style="font-size:12px;color:var(--danger);margin-bottom:.5rem;display:none;"></div>
           <button onclick="addEmployee()" style="width:100%;padding:9px;border:none;border-radius:7px;background:var(--primary);color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">新增員工</button>
         </div>
@@ -1843,7 +1844,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v135 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v136 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2412,10 +2413,16 @@ function empMgmtItemHtml(e) {
       roleBtn('is_gm', '總經理', '#f3e5ff', '#6b21a8', 'var(--muted)') +
       '<button data-empno="'+e.emp_no+'" onclick="resetPw(this)" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fafafa;color:var(--muted);cursor:pointer;font-size:11px;font-family:inherit;">重設密碼</button>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;margin-top:.55rem;align-items:end;background:#f4f9f5;border:1px dashed var(--primary-light);border-radius:8px;padding:.5rem .6rem;">' +
-      '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職等</label><input type="number" data-empno="'+e.emp_no+'" data-fld="grade" value="'+(e.job_grade==null?"":e.job_grade)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
-      '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職級</label><input type="number" data-empno="'+e.emp_no+'" data-fld="level" value="'+(e.job_level==null?"":e.job_level)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
-      '<button data-empno="'+e.emp_no+'" onclick="saveGradeLevel(this)" style="padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:11px;font-family:inherit;font-weight:600;height:32px;">存職等</button>' +
+    '<div style="margin-top:.55rem;background:#f4f9f5;border:1px dashed var(--primary-light);border-radius:8px;padding:.5rem .6rem;">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.45rem;">' +
+        '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職等</label><input type="number" data-empno="'+e.emp_no+'" data-fld="grade" value="'+(e.job_grade==null?"":e.job_grade)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+        '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">職級</label><input type="number" data-empno="'+e.emp_no+'" data-fld="level" value="'+(e.job_level==null?"":e.job_level)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem;">' +
+        '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">年度特休（天）</label><input type="number" step="0.5" min="0" data-empno="'+e.emp_no+'" data-fld="days" value="'+(e.annual_leave_days==null?"":e.annual_leave_days)+'" placeholder="—" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+        '<div><label style="display:block;font-size:10.5px;color:var(--muted);margin-bottom:2px;">到職日</label><input type="date" data-empno="'+e.emp_no+'" data-fld="hire" value="'+(e.hire_date||"")+'" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;"></div>' +
+      '</div>' +
+      '<button data-empno="'+e.emp_no+'" onclick="saveEmpDetail(this)" style="width:100%;padding:7px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:11px;font-family:inherit;font-weight:600;">儲存職等・特休・到職日</button>' +
     '</div>' +
   '</div>';
 }
@@ -2428,11 +2435,12 @@ async function addEmployee() {
   var unitVal = document.getElementById('new-emp-unit').value;
   var title = document.getElementById('new-emp-title').value.trim();
   var days = parseFloat(document.getElementById('new-emp-days').value)||0;
+  var hire = document.getElementById('new-emp-hire').value || null;
   var errEl = document.getElementById('new-emp-error');
   errEl.style.display='none';
   if (!name||!empNo||!unitVal) { errEl.textContent='請填寫姓名、員工編號和單位'; errEl.style.display='block'; return; }
   var parts = unitVal.split('|');
-  var res = await sb.from('employees').insert({ emp_no:empNo, name:name, unit_id:parts[0], unit_name:parts[1], title:title, annual_leave_days:days, is_manager:false, is_hr:false, is_gm:false, is_active:true });
+  var res = await sb.from('employees').insert({ emp_no:empNo, name:name, unit_id:parts[0], unit_name:parts[1], title:title, annual_leave_days:days, hire_date:hire, is_manager:false, is_hr:false, is_gm:false, is_active:true });
   if (res.error) { errEl.textContent = res.error.code==='23505'?'此員工編號已存在':'新增失敗：'+res.error.message; errEl.style.display='block'; return; }
   var prov = await sb.functions.invoke('hr-admin', { body:{ action:'provision', emp_no: empNo } });
   if (prov.error || !prov.data || prov.data.ok === false) {
@@ -2440,7 +2448,7 @@ async function addEmployee() {
   } else {
     alert('✅ 已新增 '+name+'，登入帳號已建立，初始密碼為員工編號');
   }
-  ['new-emp-name','new-emp-no','new-emp-title','new-emp-days'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['new-emp-name','new-emp-no','new-emp-title','new-emp-days','new-emp-hire'].forEach(function(id){ document.getElementById(id).value=''; });
   CERT_LOADED = false; // 新增員工 → 證照統計下次重讀
   loadHrMgmt();
 }
@@ -3007,16 +3015,35 @@ function certDownloadCsv(fname, text){
 }
 
 /* ── 人員管理：儲存職等/職級 ── */
-async function saveGradeLevel(btn){
+async function saveEmpDetail(btn){
   var no=btn.dataset.empno;
-  var gi=document.querySelector('input[data-empno="'+no+'"][data-fld="grade"]');
-  var li=document.querySelector('input[data-empno="'+no+'"][data-fld="level"]');
-  var g=gi.value.trim(), l=li.value.trim();
+  var emp=allMgmtEmps.find(function(x){return x.emp_no===no;});
+  function fld(f){ return document.querySelector('input[data-empno="'+no+'"][data-fld="'+f+'"]'); }
+  var g=fld('grade').value.trim(), l=fld('level').value.trim();
+  var d=fld('days').value.trim(), h=fld('hire').value.trim();
+
   var upd={ job_grade: g===''?null:parseInt(g,10), job_level: l===''?null:parseInt(l,10) };
+
+  // 特休天數：空白不變動（避免誤清零）；有值則驗證
+  if (d !== '') {
+    var dv = parseFloat(d);
+    if (isNaN(dv) || dv < 0) { alert('年度特休天數請填 0 或正數'); return; }
+    if (dv * 2 % 1 !== 0) { alert('年度特休天數只能是整數或半天'); return; }
+    var oldDv = emp && emp.annual_leave_days!=null ? parseFloat(emp.annual_leave_days) : null;
+    if (oldDv !== null && oldDv !== dv) {
+      if (!confirm('確定將 '+(emp?emp.name:no)+' 的年度特休由 '+oldDv+' 天改為 '+dv+' 天？')) return;
+    }
+    upd.annual_leave_days = dv;
+  }
+  upd.hire_date = h===''?null:h;
+
   var res=await sb.from('employees').update(upd).eq('emp_no', no);
   if(res.error){ alert('儲存失敗：'+res.error.message); return; }
   var orig=btn.textContent; btn.textContent='✓已存'; setTimeout(function(){ btn.textContent=orig; },1300);
-  var emp=allMgmtEmps.find(function(x){return x.emp_no===no;}); if(emp){ emp.job_grade=upd.job_grade; emp.job_level=upd.job_level; }
+  if(emp){
+    emp.job_grade=upd.job_grade; emp.job_level=upd.job_level; emp.hire_date=upd.hire_date;
+    if(upd.annual_leave_days!==undefined) emp.annual_leave_days=upd.annual_leave_days;
+  }
   CERT_LOADED=false; // 證照統計/法規下次進入時重讀最新職等
 }
 
