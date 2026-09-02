@@ -187,79 +187,79 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 /* 社名與單名字數不同，用兩端對齊擐成等寬 */
 #trip-print .tp-titlebox { width:74mm; flex:none; }
 #trip-print .tp-org {
-  font-size:15.5px; font-weight:500; line-height:1.3;
+  font-size:14px; font-weight:500; line-height:1.25;
   text-align:justify; text-align-last:justify; text-justify:inter-character;
 }
 #trip-print .tp-title {
-  font-size:29px; font-weight:700; margin:1.5mm 0 0; line-height:1.15;
+  font-size:26px; font-weight:700; margin:1.2mm 0 0; line-height:1.1;
   text-align:justify; text-align-last:justify; text-justify:inter-character;
 }
 #trip-print .tp-apply { font-size:12.5px; letter-spacing:.5px; white-space:nowrap; padding-bottom:1mm; }
-#trip-print .tp-rule { border:none; border-top:2px solid #000; margin:3mm 0 0; }
+#trip-print .tp-rule { border:none; border-top:2px solid #000; margin:2mm 0 0; }
 
 /* 區塊 */
-#trip-print .tp-block { padding:4mm 0 3.5mm; border-bottom:1px solid #000; }
+#trip-print .tp-block { padding:2.5mm 0 2mm; border-bottom:1px solid #000; }
 #trip-print .tp-block:last-of-type { border-bottom:none; }
 #trip-print .tp-sec {
-  font-size:11.5px; font-weight:700; letter-spacing:3px;
-  margin-bottom:2.5mm;
+  font-size:11px; font-weight:700; letter-spacing:3px;
+  margin-bottom:1.5mm;
 }
-#trip-print .tp-grid { display:grid; grid-template-columns:1fr 1fr; gap:2.5mm 8mm; }
+#trip-print .tp-grid { display:grid; grid-template-columns:1fr 1fr; gap:2mm 8mm; }
 #trip-print .tp-f { display:flex; align-items:baseline; gap:3mm; }
 #trip-print .tp-k {
   font-size:11px; letter-spacing:2px; flex:none; width:17mm;
 }
 #trip-print .tp-v {
-  font-size:14.5px; font-weight:600; flex:1;
-  border-bottom:1px solid #000; padding:0 1mm 1mm; min-height:6mm;
+  font-size:13.5px; font-weight:600; flex:1;
+  border-bottom:1px solid #000; padding:0 1mm .8mm; min-height:5mm;
 }
 #trip-print .tp-v.tp-plain { border-bottom:none; }
 
 /* 長欄位 */
 #trip-print .tp-long { margin-top:1mm; }
-#trip-print .tp-long .tp-v { font-size:14px; font-weight:500; min-height:9mm; line-height:1.7; }
+#trip-print .tp-long .tp-v { font-size:13px; font-weight:500; min-height:7mm; line-height:1.55; }
 
 /* 日期區 */
 #trip-print .tp-dates { display:flex; align-items:flex-end; justify-content:space-between; gap:8mm; }
-#trip-print .tp-dl { font-size:14.5px; font-weight:600; letter-spacing:.5px; line-height:2.1; }
+#trip-print .tp-dl { font-size:14px; font-weight:600; letter-spacing:.5px; line-height:1.8; }
 #trip-print .tp-dl b { font-weight:700; padding:0 1.5mm; }
 #trip-print .tp-total {
-  font-size:19px; font-weight:700; letter-spacing:1px;
-  border:2px solid #000; padding:2.5mm 6mm; white-space:nowrap;
+  font-size:18px; font-weight:700; letter-spacing:1px;
+  border:2px solid #000; padding:2mm 5mm; white-space:nowrap;
 }
 
 /* 蓋章區 */
 #trip-print .tp-seal { width:30mm; flex:none; text-align:center; }
 #trip-print .tp-seal .tp-k { width:auto; display:block; margin-bottom:1mm; }
-#trip-print .tp-seal .tp-box { height:17mm; border-bottom:1px solid #000; }
+#trip-print .tp-seal .tp-box { height:14mm; border-bottom:1px solid #000; }
 
 /* 旅費 */
 #trip-print .tp-fee { display:grid; grid-template-columns:1fr 1fr; gap:0 10mm; }
 #trip-print .tp-fr {
   display:flex; align-items:baseline; gap:2mm;
-  padding:1.6mm 0; border-bottom:1px dotted #000;
+  padding:1.2mm 0; border-bottom:1px dotted #000;
 }
 #trip-print .tp-fr .g { font-size:11.5px; letter-spacing:2px; width:14mm; flex:none; }
 #trip-print .tp-fr .n { font-size:13px; flex:1; }
 #trip-print .tp-fr .a { width:26mm; text-align:right; font-size:13px; }
 /* 手寫空白格：人 × 天 */
 #trip-print .tp-bl { display:inline-block; min-width:15mm; }
-#trip-print .tp-fr.wide { padding:2.6mm 0; }
-#trip-print .tp-fr.sum { border-bottom:2px solid #000; border-top:1px solid #000; margin-top:1mm; }
+#trip-print .tp-fr.wide { padding:2mm 0; }
+#trip-print .tp-fr.sum { border-bottom:2px solid #000; border-top:1px solid #000; margin-top:.8mm; }
 #trip-print .tp-fr.sum .n { font-weight:700; letter-spacing:2px; }
-#trip-print .tp-sign { display:flex; align-items:flex-end; gap:4mm; margin-top:4.5mm; }
+#trip-print .tp-sign { display:flex; align-items:flex-end; gap:4mm; margin-top:3.5mm; }
 #trip-print .tp-sign .tp-k { width:auto; flex:none; }
-#trip-print .tp-sign .ln { flex:1; border-bottom:1px solid #000; height:11mm; }
-#trip-print .tp-acct { display:flex; align-items:flex-end; gap:4mm; margin-top:3.5mm; }
+#trip-print .tp-sign .ln { flex:1; border-bottom:1px solid #000; height:9mm; }
+#trip-print .tp-acct { display:flex; align-items:flex-end; gap:4mm; margin-top:2.5mm; }
 #trip-print .tp-acct .tp-k { width:auto; flex:none; }
-#trip-print .tp-acct .ln { flex:1; border-bottom:1px solid #000; height:8mm; }
+#trip-print .tp-acct .ln { flex:1; border-bottom:1px solid #000; height:7mm; }
 
 /* 用印列 */
-#trip-print .tp-appr { display:flex; gap:5mm; margin-top:7mm; }
+#trip-print .tp-appr { display:flex; gap:5mm; margin-top:5mm; }
 #trip-print .tp-appr div { flex:1; text-align:center; }
-#trip-print .tp-appr .ln { height:15mm; border-bottom:1px solid #000; }
+#trip-print .tp-appr .ln { height:11mm; border-bottom:1px solid #000; }
 #trip-print .tp-appr .lb { font-size:11px; letter-spacing:1.5px; padding-top:1.5mm; }
-#trip-print .tp-ver { margin-top:5mm; font-size:10px; letter-spacing:.5px; }
+#trip-print .tp-ver { margin-top:3mm; font-size:10px; letter-spacing:.5px; }
 
 
 @media print {
@@ -1240,7 +1240,7 @@ async function printTrip(id) {
   var PD = BL + ' 人 × ' + BL + ' 天';
   var fees = [
     ['車　資','高　鐵',0], ['','計程車',0], ['','捷　運',0], ['','其　他',0],
-    ['膳　費',PD,1], ['宿　費',PD,1], ['什　費','',0], ['','',0]
+    ['膳　費',PD,1], ['宿　費',PD,1], ['什　費','',0]
   ];
   var feeHtml = fees.map(function(f){
     return '<div class="tp-fr' + (f[2] ? ' wide' : '') + '">' +
@@ -1310,6 +1310,23 @@ async function printTrip(id) {
   el.classList.add('on');
   document.body.classList.add('tp-printing');
   el.scrollTop = 0;
+  tpFitOnePage();
+}
+
+// 保險：量測實際高度，超過 A4 可印高度就整頁等比縮小，
+// 確保事由再長也不會跡到第二頁。
+function tpFitOnePage() {
+  var page = document.querySelector('#trip-print .tp-page');
+  if (!page) return;
+  page.style.zoom = '';
+  var mm2px = 96 / 25.4;
+  var padTop = 14, padBot = 12;                    // .tp-page 螢幕上下內邊距(mm)
+  var avail = (297 - 11 - 9) * mm2px;              // A4 扇去 @page 上下邊界
+  var natural = page.scrollHeight - (padTop + padBot) * mm2px;
+  if (natural > avail) {
+    var z = avail / natural;
+    page.style.zoom = String(Math.max(0.7, Math.floor(z * 1000) / 1000));
+  }
 }
 
 async function togglePaperConfirm(id, checked) {
@@ -2098,7 +2115,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v142 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v143 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
