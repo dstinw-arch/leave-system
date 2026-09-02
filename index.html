@@ -1209,6 +1209,10 @@ async function printTrip(id) {
   (eRes.data || []).forEach(function(e){ byNo[e.emp_no] = e; });
   var me = byNo[r.emp_no] || {};
   var px = r.proxy_emp_no ? (byNo[r.proxy_emp_no] || {}) : {};
+  // 職稱／單位優先用送單當下的快照，沒有快照才回頭抓現職資料
+  var myTitle = r.emp_title || me.title || '';
+  var pxTitle = r.proxy_title || px.title || '';
+  var pxUnit  = r.proxy_unit  || px.unit_name || r.unit_name;
 
   var ap = tpRoc(r.created_at), sd = tpRoc(r.start_date), ed = tpRoc(r.end_date);
   var dNum = parseFloat(r.days) || 0;
@@ -1266,7 +1270,7 @@ async function printTrip(id) {
      '</div>' +
      '<hr class="tp-rule">' +
 
-     person('出　差　人', r.unit_name, r.emp_name, r.emp_no, me.title, '') +
+     person('出　差　人', r.unit_name, r.emp_name, r.emp_no, myTitle, '') +
 
      '<div class="tp-block">' +
        '<div class="tp-sec">出差事由</div>' +
@@ -1290,7 +1294,7 @@ async function printTrip(id) {
        '</div>' +
      '</div>' +
 
-     person('職務代理人', px.unit_name || r.unit_name, r.proxy_name, r.proxy_emp_no, px.title, r.proxy_duty) +
+     person('職務代理人', pxUnit, r.proxy_name, r.proxy_emp_no, pxTitle, r.proxy_duty) +
 
      '<div class="tp-block">' +
        '<div class="tp-sec">出差旅費明細</div>' +
@@ -1532,6 +1536,7 @@ async function doSubmitLeave() {
   }
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
+    emp_title:emp.title || null,
     leave_type:type, leave_subtype:subtype, start_date:startDate, end_date:endDate,
     start_time:startTime, end_time:endTime, days, reason,
     proxy_name:proxyName, proxy_duty:proxyDuty,
@@ -2115,7 +2120,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v143 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v144 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
