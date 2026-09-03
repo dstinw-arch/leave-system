@@ -1748,6 +1748,15 @@ async function loadChairmanReview() {
 // ── 人事：全員假單 ──
 var empCache = {}; // emp_no -> {title, duty}
 var empProxyCache = {}; // name -> {emp_no, unit_name, title}
+var empUnitCache = {};  // emp_no -> 現職單位名稱（含已停用員工）
+
+// 以人為主：查詢時看該員「現在」在哪個單位，
+// 不是假單上記錄的當時單位。假單的 unit_name 快照不會被修改，
+// 列印、匯出欄位、稽核軌跡全部保留原樣。
+// 找不到員工資料時退回使用假單快照，避免資料消失。
+function empCurrentUnit(r) {
+  return empUnitCache[r.emp_no] || r.unit_name || '';
+}
 var allHrEmps = []; // 目前在職員工名單（用於人員篩選下拉選單，反映「現在」單位，而非假單快照上的單位）
 
 // ── 分頁抓取全部列（突破 Supabase 單次 1000 列上限）──
@@ -1778,6 +1787,7 @@ async function loadHrAll() {
   (empRes.data||[]).forEach(function(e){
     empCache[e.emp_no] = {title: e.title||'', duty: e.duty||''};
     empProxyCache[e.name] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
+    empUnitCache[e.emp_no] = e.unit_name || '';
   });
   var FIXED_UNITS = [["7","管理部"], ["16","營業部"], ["25","水碓分社"], ["34","竹圍分社"], ["43","英專分社"], ["52","義山分社"], ["61","三芝分社"], ["70","八里分社"], ["89","成州分社"], ["98","五股分社"], ["104","萬金分社"], ["113","新莊分社"], ["122","泰山分社"], ["131","林口分社"], ["140","板橋分社"], ["159","蘆洲分社"], ["168","三重分社"]];
   var unitSel = document.getElementById('hr-filter-unit');
@@ -1806,7 +1816,7 @@ function filterHrLeaves() {
   var status = document.getElementById('hr-filter-status').value;
   var leaveType = document.getElementById('hr-filter-leave-type').value;
   var filtered = allHrLeaves;
-  if (unit) filtered = filtered.filter(function(r){ return r.unit_name === unit; });
+  if (unit) filtered = filtered.filter(function(r){ return empCurrentUnit(r) === unit; });
   if (emp) filtered = filtered.filter(function(r){ return r.emp_name === emp; });
   filtered = filtered.slice().sort(function(a,b){ return docNoKey(b.doc_no) - docNoKey(a.doc_no); });
   if (status === 'unconfirmed') {
@@ -2224,7 +2234,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v148 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v149 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2410,7 +2420,7 @@ function downloadLeaves() {
   const unit = document.getElementById('hr-filter-unit').value;
   const status = document.getElementById('hr-filter-status').value;
   let filtered = allHrLeaves.slice();
-  if (unit) filtered = filtered.filter(function(r){ return r.unit_name===unit; });
+  if (unit) filtered = filtered.filter(function(r){ return empCurrentUnit(r)===unit; });
   if (status) filtered = filtered.filter(function(r){ return r.status===status; });
   filtered = filtered.filter(function(r){ return r.status !== 'rejected'; });
   if (!filtered.length) { alert('沒有資料可下載'); return; }
