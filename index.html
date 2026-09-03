@@ -165,8 +165,15 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   background:#f2f2f0; overflow:auto; -webkit-overflow-scrolling:touch;
 }
 #trip-print .tp-bar {
-  position:sticky; top:0; z-index:2; display:flex; gap:.5rem; justify-content:flex-end;
-  padding:.6rem .8rem; background:#1C5E45;
+  position:sticky; top:0; z-index:2; display:flex; flex-wrap:wrap; align-items:center;
+  gap:.5rem; justify-content:flex-end; padding:.6rem .8rem; background:#1C5E45;
+}
+#trip-print .tp-tip {
+  flex:1 1 100%; order:-1; color:rgba(255,255,255,.9);
+  font-size:12px; line-height:1.6; letter-spacing:.3px;
+}
+@media (min-width:620px) {
+  #trip-print .tp-tip { flex:1 1 auto; order:0; margin-right:auto; }
 }
 #trip-print .tp-bar button {
   padding:8px 20px; border:none; border-radius:6px; cursor:pointer;
@@ -261,6 +268,24 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 #trip-print .tp-appr .lb { font-size:11px; letter-spacing:1.5px; padding-top:1.5mm; }
 #trip-print .tp-ver { margin-top:3mm; font-size:10px; letter-spacing:.5px; }
 
+/* ===== 填寫模式（螢幕輸入後列印）===== */
+#trip-print .tp-edit-btn { background:#E8DCB5; color:#1a1a1a; }
+#trip-print.tp-edit .tp-edit-btn { background:#fff; color:#1C5E45; }
+#trip-print .tp-in { outline:none; }
+#trip-print .tp-fr .a.tp-in { min-width:22mm; }
+#trip-print .tp-bl.tp-in { text-align:center; }
+#trip-print .tp-acct .ln.tp-in { padding-top:2mm; font-size:13px; }
+#trip-print .tp-fr .tp-sum-v { font-weight:700; }
+#trip-print.tp-edit .tp-in {
+  background:#fffdf0; box-shadow:inset 0 0 0 1px #c4b485;
+  border-radius:2px; cursor:text;
+}
+#trip-print.tp-edit .tp-in:empty { min-height:4.6mm; }
+#trip-print.tp-edit .tp-in:empty::before {
+  content:attr(data-ph); color:#b3ab97; font-size:10.5px; letter-spacing:1px;
+}
+#trip-print.tp-edit .tp-in:focus { background:#fff; box-shadow:inset 0 0 0 1.6px #1C5E45; }
+
 
 @media print {
   @page { size:A4 portrait; margin:11mm 12mm 9mm; }
@@ -277,6 +302,9 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   #trip-print .tp-block { break-inside:avoid; }
+  /* 填寫模式：列印時去掉底色與提示字 */
+  #trip-print .tp-in { box-shadow:none !important; background:transparent !important; }
+  #trip-print .tp-in::before { content:"" !important; }
 }
 </style>
 </head>
@@ -1193,10 +1221,58 @@ function tpEsc(v) {
   return String(v == null ? '' : v)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+/* ===== 出差單填寫模式 ===== */
+var tpEditMode = false;
+function tpin(cls, ph, extra) {
+  return 'class="' + (cls ? cls + ' ' : '') + 'tp-in" contenteditable="false" spellcheck="false"' +
+         ' data-ph="' + tpEsc(ph || '') + '" onpaste="tpPaste(event)" onkeydown="tpKey(event)"' +
+         (extra || '');
+}
+function tpPaste(e) {
+  e.preventDefault();
+  var t = ((e.clipboardData || window.clipboardData).getData('text') || '').replace(/\r?\n/g, ' ');
+  document.execCommand('insertText', false, t);
+}
+function tpKey(e) { if (e.key === 'Enter') e.preventDefault(); }
+function tpToggleEdit() {
+  var el = document.getElementById('trip-print'); if (!el) return;
+  tpEditMode = !tpEditMode;
+  el.classList.toggle('tp-edit', tpEditMode);
+  var list = el.querySelectorAll('.tp-in');
+  for (var i = 0; i < list.length; i++) {
+    list[i].setAttribute('contenteditable', tpEditMode ? 'true' : 'false');
+  }
+  var b = document.getElementById('tp-edit-btn');
+  if (b) b.textContent = tpEditMode ? '\u2713 \u586b\u5beb\u4e2d\uff08\u9ede\u6b64\u9396\u5b9a\uff09' : '\u270e \u586b\u5beb\u6a21\u5f0f';
+  var tip = document.getElementById('tp-tip');
+  if (tip) {
+    tip.textContent = tpEditMode
+      ? '\u6de1\u9ec3\u8272\u6b04\u4f4d\u53ef\u76f4\u63a5\u6253\u5b57\uff0c\u4e0d\u60f3\u586b\u7684\u7559\u7a7a\u5373\u53ef\uff08\u5217\u5370\u6642\u4e0d\u6703\u51fa\u73fe\u5e95\u8272\uff09\uff1b\u65c5\u8cbb\u5408\u8a08\u6703\u81ea\u52d5\u52a0\u7e3d\u3002'
+      : '\u8981\u7528\u96fb\u8166\u6253\u5b57\u8acb\u5148\u6309\u300c\u270e \u586b\u5beb\u6a21\u5f0f\u300d\uff1b\u4e5f\u53ef\u76f4\u63a5\u5217\u5370\u7a7a\u767d\u55ae\u624b\u5beb\u3002';
+  }
+  if (!tpEditMode) tpFitOnePage();
+}
+function tpNum(s) {
+  var n = parseFloat(String(s).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+function tpSumFees() {
+  var el = document.getElementById('trip-print'); if (!el) return;
+  var cells = el.querySelectorAll('.tp-fee .tp-amt');
+  var total = 0, any = false;
+  for (var i = 0; i < cells.length; i++) {
+    var v = cells[i].textContent.trim();
+    if (v) { total += tpNum(v); any = true; }
+  }
+  var s = document.getElementById('tp-sum');
+  if (s) s.textContent = any ? total.toLocaleString('en-US') : '';
+}
+function tpDoPrint() { tpFitOnePage(); window.print(); }
 function closeTripPrint() {
   document.body.classList.remove('tp-printing');
+  tpEditMode = false;
   var el = document.getElementById('trip-print');
-  el.classList.remove('on'); el.innerHTML = '';
+  el.classList.remove('on'); el.classList.remove('tp-edit'); el.innerHTML = '';
 }
 async function printTrip(id) {
   var res = await sb.from('leave_requests').select('*').eq('id', id).single();
@@ -1220,9 +1296,11 @@ async function printTrip(id) {
   if (dNum === 0.5) half = (r.start_time && String(r.start_time) >= '12:00') ? '下午' : '上午';
   var daysTxt = (dNum % 1 === 0 ? String(dNum) : dNum.toFixed(1)) + ' 天' + (half ? '（' + half + '）' : '');
 
-  function fld(k, v, plain) {
+  function fld(k, v, plain, ph) {
+    var cls = 'tp-v' + (plain ? ' tp-plain' : '');
+    var at = ph ? tpin(cls, ph) : 'class="' + cls + '"';
     return '<div class="tp-f"><span class="tp-k">' + k + '</span>' +
-           '<span class="tp-v' + (plain ? ' tp-plain' : '') + '">' + v + '</span></div>';
+           '<span ' + at + '>' + v + '</span></div>';
   }
   function person(title, unit, name, no, jobTitle, duty) {
     return '<div class="tp-block">' +
@@ -1233,31 +1311,39 @@ async function printTrip(id) {
           fld('員工編號', tpEsc(no)) +
           fld('單　　位', tpEsc(unit)) +
           fld('職　　稱', tpEsc(jobTitle)) +
-          fld('擔任事務', tpEsc(duty || '') || '&nbsp;') +
+          fld('擔任事務', tpEsc(duty || ''), false, duty ? null : '（可填寫）') +
         '</div>' +
         '<div class="tp-seal"><span class="tp-k">蓋　　章</span><div class="tp-box"></div></div>' +
       '</div>' +
     '</div>';
   }
 
-  var BL = '<span class="tp-bl"></span>';
-  var PD = BL + ' 人 × ' + BL + ' 天';
+  var PD = '<span ' + tpin('tp-bl', '人數') + '></span> 人 × ' +
+           '<span ' + tpin('tp-bl', '天數') + '></span> 天';
   var fees = [
     ['車　資','高　鐵',0], ['','計程車',0], ['','捷　運',0], ['','其　他',0],
     ['膳　費',PD,1], ['宿　費',PD,1], ['什　費','',0]
   ];
   var feeHtml = fees.map(function(f){
+    var nm = f[1] ? '<span class="n">' + f[1] + '</span>'
+                  : '<span ' + tpin('n', '（項目）') + '></span>';
     return '<div class="tp-fr' + (f[2] ? ' wide' : '') + '">' +
-      '<span class="g">' + f[0] + '</span><span class="n">' + f[1] + '</span><span class="a"></span></div>';
+      '<span class="g">' + f[0] + '</span>' + nm +
+      '<span ' + tpin('a tp-amt', '', ' oninput="tpSumFees()"') + '></span></div>';
   }).join('') +
-  '<div class="tp-fr sum" style="grid-column:1 / -1;"><span class="g"></span><span class="n">合　計</span><span class="a"></span></div>';
+  '<div class="tp-fr sum" style="grid-column:1 / -1;"><span class="g"></span><span class="n">合　計</span><span class="a tp-sum-v" id="tp-sum"></span></div>';
 
   var appr = ['人事登記','單位主管','副總經理','總經理','理事主席']
     .map(function(t){ return '<div><div class="ln"></div><div class="lb">' + t + '</div></div>'; }).join('');
 
   var html =
    '<div class="tp-bar">' +
-     '<button class="tp-print" onclick="window.print()">列印</button>' +
+     '<span class="tp-tip" id="tp-tip">' +
+       '要用電腦打字請先按「✎ 填寫模式」；' +
+       '也可直接列印空白單手寫。' +
+     '</span>' +
+     '<button class="tp-edit-btn" id="tp-edit-btn" onclick="tpToggleEdit()">✎ 填寫模式</button>' +
+     '<button class="tp-print" onclick="tpDoPrint()">列印</button>' +
      '<button class="tp-close" onclick="closeTripPrint()">關閉</button>' +
    '</div>' +
    '<div class="tp-page">' +
@@ -1280,7 +1366,8 @@ async function printTrip(id) {
 
      '<div class="tp-block">' +
        '<div class="tp-sec">出差地點</div>' +
-       '<div class="tp-long"><div class="tp-f"><span class="tp-v">&nbsp;</span></div></div>' +
+       '<div class="tp-long"><div class="tp-f"><span ' +
+         tpin('tp-v', '（可填寫出差地點）') + '></span></div></div>' +
      '</div>' +
 
      '<div class="tp-block">' +
@@ -1301,8 +1388,10 @@ async function printTrip(id) {
        '<div class="tp-fee">' + feeHtml + '</div>' +
        '<div class="tp-sign"><span class="tp-k">出差人簽領</span><span class="ln"></span>' +
          '<span class="tp-k">會計經辦</span><span class="ln"></span></div>' +
-       '<div class="tp-acct"><span class="tp-k">出差人帳號</span><span class="ln"></span>' +
-         '<span class="tp-k">日　　期</span><span class="ln" style="flex:.55;"></span></div>' +
+       '<div class="tp-acct"><span class="tp-k">出差人帳號</span><span ' +
+         tpin('ln', '（可填寫）') + '></span>' +
+         '<span class="tp-k">日　　期</span><span ' +
+         tpin('ln', '', ' style="flex:.55;"') + '></span></div>' +
      '</div>' +
 
      '<div class="tp-appr">' + appr + '</div>' +
@@ -1311,6 +1400,8 @@ async function printTrip(id) {
 
   var el = document.getElementById('trip-print');
   el.innerHTML = html;
+  tpEditMode = false;
+  el.classList.remove('tp-edit');
   el.classList.add('on');
   document.body.classList.add('tp-printing');
   el.scrollTop = 0;
@@ -2120,7 +2211,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v144 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v146 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
