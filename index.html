@@ -617,6 +617,9 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <select id="mgmt-filter-unit" onchange="filterMgmtEmps()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;background:#fff;-webkit-appearance:none;"><option value="">所有單位</option></select>
           <input id="mgmt-search" type="text" placeholder="搜尋姓名或編號" oninput="filterMgmtEmps()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-family:inherit;" />
         </div>
+        <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+          <button onclick="exportDocNoMap()" style="flex:1;padding:9px;border:1.5px solid var(--border);border-radius:7px;background:#fff;color:var(--primary-dark);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">⬇ 匯出單號對照表</button>
+        </div>
         <div id="mgmt-count" style="font-size:11px;color:var(--muted);margin-bottom:.4rem;"></div>
       </div>
       <div id="hr-mgmt-list" style="flex:1;overflow-y:auto;padding-bottom:5rem;"></div>
@@ -1805,7 +1808,7 @@ function filterHrLeaves() {
   var filtered = allHrLeaves;
   if (unit) filtered = filtered.filter(function(r){ return r.unit_name === unit; });
   if (emp) filtered = filtered.filter(function(r){ return r.emp_name === emp; });
-  filtered = filtered.slice().sort(function(a,b){ return (parseInt(b.doc_no)||0)-(parseInt(a.doc_no)||0); });
+  filtered = filtered.slice().sort(function(a,b){ return docNoKey(b.doc_no) - docNoKey(a.doc_no); });
   if (status === 'unconfirmed') {
     filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
   } else if (status) {
@@ -1857,7 +1860,7 @@ async function approveAllLeaves(src) {
       var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
       await notifyGM(gmMsg);
     } else {
-      var docNo = r.doc_no || await getNextDocNo();
+      var docNo = r.doc_no || await getNextDocNo(r.start_date);
       await sb.from('leave_requests').update({
         status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
       }).eq('id', r.id);
@@ -2052,19 +2055,29 @@ function syncEndDate() {
   }
 }
 
-async function getNextDocNo() {
-  const { data } = await sb.from('leave_requests')
-    .select('doc_no')
-    .not('doc_no', 'is', null)
-    .neq('doc_no', '');
-  var max = 0;
-  (data || []).forEach(function(r) {
-    if (/^\d+$/.test(r.doc_no)) {
-      var n = parseInt(r.doc_no);
-      if (n > max) max = n;
-    }
-  });
-  return String(max + 1);
+// 單號：民國年 + 4 位流水（例 115-0001）。
+// 改由資料庫端 next_doc_no() 原子性取號，
+// 不再把全部假單抓回前端算 max（會撞到 1000 筆上限而重複給號）。
+// 年度依請假起日認定，確保「下載某年度」跟單號前綴一致。
+async function getNextDocNo(startDate) {
+  var y = new Date().getFullYear();
+  if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) y = parseInt(startDate.slice(0, 4), 10);
+  var rocYear = y - 1911;
+  var res = await sb.rpc('next_doc_no', { p_roc_year: rocYear });
+  if (res.error || !res.data) {
+    alert('取單號失敗：' + (res.error ? res.error.message : '無回應') + '\n請重試，不要重複按審核。');
+    throw new Error('next_doc_no failed');
+  }
+  return res.data;
+}
+
+// 單號排序金鑰：115-0001 → 1150001；舊的純數字排在前面
+function docNoKey(v) {
+  var t = String(v == null ? '' : v);
+  var m = t.match(/^(\d{3})-(\d+)$/);
+  if (m) return parseInt(m[1], 10) * 100000 + parseInt(m[2], 10);
+  var n = parseInt(t, 10);
+  return isNaN(n) ? -1 : n;
 }
 
 async function approveLeave() {
@@ -2089,7 +2102,7 @@ async function approveLeave() {
     await notifyGM(gmMsg);
   } else {
     // <3天 或 總經理/理事主席核准：直接核准並通知員工
-    var docNo = r.doc_no || await getNextDocNo();
+    var docNo = r.doc_no || await getNextDocNo(r.start_date);
     await sb.from('leave_requests').update({
       status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', r.id);
@@ -2211,7 +2224,7 @@ async function loadCalendar() {
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v146 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
+  if (dbg) dbg.textContent = 'v148 emp:'+currentUser.emp_no+' CHAIR:'+CHAIRMAN_EMP_NO+' match:'+(currentUser.emp_no===CHAIRMAN_EMP_NO)+' leaves:'+allUnitLeaves.length;
   renderCalendar();
 }
 
@@ -2349,7 +2362,7 @@ async function calApprove(id) {
     var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
     await notifyGM(gmMsg);
   } else {
-    var docNo = r.doc_no || await getNextDocNo();
+    var docNo = r.doc_no || await getNextDocNo(r.start_date);
     await sb.from('leave_requests').update({
       status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
     }).eq('id', id);
@@ -2403,11 +2416,10 @@ function downloadLeaves() {
   if (!filtered.length) { alert('沒有資料可下載'); return; }
   // 按 doc_no 排序（有的排前面），沒有 doc_no 的按 created_at 排後面
   filtered.sort(function(a,b){
-    var an = a.doc_no ? parseInt(a.doc_no) || a.doc_no : Infinity;
-    var bn = b.doc_no ? parseInt(b.doc_no) || b.doc_no : Infinity;
+    var an = a.doc_no ? docNoKey(a.doc_no) : Infinity;
+    var bn = b.doc_no ? docNoKey(b.doc_no) : Infinity;
     if (an === Infinity && bn === Infinity) return new Date(a.created_at) - new Date(b.created_at);
-    if (typeof an === 'number' && typeof bn === 'number') return an - bn;
-    return String(an).localeCompare(String(bn));
+    return an - bn;
   });
 
   // 欄位對應「給clude請假紀錄.xlsx」格式（22欄）
@@ -2418,15 +2430,6 @@ function downloadLeaves() {
     '代理人姓名','代理人員工編號','代理人單位','代理人職稱','代理人擔任事務',
     '審核人','三日以上總經理審核日期'
   ];
-  // 動態計算最大 doc_no（純數字的）
-  var maxDocNo = filtered.reduce(function(max, r) {
-    if (r.doc_no && /^\d+$/.test(r.doc_no)) {
-      var n = parseInt(r.doc_no);
-      return n > max ? n : max;
-    }
-    return max;
-  }, 655);
-  var newSeq = 0;
   var rows = filtered.map(function(r, i) {
     var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
     // 三日以上總經理審核日期：reviewer_type=gm 且天數>=3 且已審核
@@ -2438,7 +2441,7 @@ function downloadLeaves() {
       gmReviewDate = reviewDate;
     }
     return [
-      r.doc_no || String(maxDocNo + (++newSeq)),
+      r.doc_no || '',
       r.created_at ? r.created_at.split('T')[0] : '',
       r.emp_name||'', r.emp_no||'', r.unit_name||'',
       r.title || (empCache[r.emp_no]||{}).title || '',
@@ -2719,17 +2722,28 @@ async function loadHrMgmt() {
   filterMgmtEmps();
 }
 
+// 單位屬於同一部門：管理部選 7 時，7-01、7-02… 都要含進來。
+// 注意不能用 startsWith('7')，否則八里分社（70）會被誤判。
+function mgmtUnitMatch(empUnitId, filterId) {
+  var u = String(empUnitId == null ? '' : empUnitId);
+  return u === filterId || u.indexOf(filterId + '-') === 0;
+}
+function mgmtUnitOrder(id) {
+  id = String(id == null ? '' : id);
+  if (/^7(-|$)/.test(id)) { var mm = id.match(/^7-(\d+)$/); return 1 + (mm ? parseInt(mm[1],10)/100 : 0); }
+  var m = {"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17};
+  return m[id] || 999;
+}
 function filterMgmtEmps() {
   var unitId = document.getElementById('mgmt-filter-unit').value;
   var search = document.getElementById('mgmt-search').value.trim().toLowerCase();
   var filtered = allMgmtEmps;
-  if (unitId) filtered = filtered.filter(function(e){ return e.unit_id===unitId; });
+  if (unitId) filtered = filtered.filter(function(e){ return mgmtUnitMatch(e.unit_id, unitId); });
   if (search) filtered = filtered.filter(function(e){ return e.name.indexOf(search)>=0||e.emp_no.indexOf(search)>=0; });
-  // 排序：先依單位ID，再依員工編號長度（6碼→7碼），再依編號
-  var unitOrderMap = {"7":1,"16":2,"25":3,"34":4,"43":5,"52":6,"61":7,"70":8,"89":9,"98":10,"104":11,"113":12,"122":13,"131":14,"140":15,"159":16,"168":17};
+  // 排序：先依單位ID（管理部 7 → 7-01 → 7-02…），再依員工編號長度（6碼→7碼），再依編號
   filtered.sort(function(a,b){
-    var ua = unitOrderMap[a.unit_id]||999;
-    var ub = unitOrderMap[b.unit_id]||999;
+    var ua = mgmtUnitOrder(a.unit_id);
+    var ub = mgmtUnitOrder(b.unit_id);
     if (ua !== ub) return ua - ub;
     if (a.emp_no.length !== b.emp_no.length) return a.emp_no.length - b.emp_no.length;
     return a.emp_no.localeCompare(b.emp_no);
@@ -2738,6 +2752,44 @@ function filterMgmtEmps() {
   var list = document.getElementById('hr-mgmt-list');
   if (!filtered.length) { list.innerHTML='<div class="empty-hint">沒有符合的員工</div>'; return; }
   list.innerHTML = filtered.map(empMgmtItemHtml).join('');
+}
+
+// 舊號 → 新號對照表（115 年重新編號的稽核軌跡）
+async function exportDocNoMap() {
+  var all = [], from = 0, size = 1000;
+  while (true) {
+    var res = await sb.from('leave_requests')
+      .select('doc_no,doc_no_old,emp_no,emp_name,unit_name,leave_type,leave_subtype,start_date,end_date,days,status,reviewed_at')
+      .not('doc_no', 'is', null)
+      .range(from, from + size - 1);
+    if (res.error) { alert('匯出失敗：' + res.error.message); return; }
+    all = all.concat(res.data || []);
+    if (!res.data || res.data.length < size) break;
+    from += size;
+  }
+  all.sort(function(a,b){ return docNoKey(a.doc_no) - docNoKey(b.doc_no); });
+  var head = ['新單號','舊單號','是否變動','員工編號','姓名','單位','假別','假別細項','起日','訖日','天數','狀態','核准日期'];
+  var lines = [head.join(',')];
+  all.forEach(function(r){
+    lines.push([
+      r.doc_no||'', r.doc_no_old||'',
+      (r.doc_no_old && r.doc_no_old !== r.doc_no) ? 'Y' : '',
+      r.emp_no||'', r.emp_name||'', r.unit_name||'',
+      r.leave_type||'', r.leave_subtype||'',
+      r.start_date||'', r.end_date||'', r.days||'',
+      r.status||'', r.reviewed_at ? r.reviewed_at.split('T')[0] : ''
+    ].map(function(v){
+      var t = String(v == null ? '' : v);
+      return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g,'""') + '"' : t;
+    }).join(','));
+  });
+  var blob = new Blob(['\ufeff' + lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '請假單號對照表_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  alert('已匯出 ' + all.length + ' 筆對照紀錄。');
 }
 
 function empMgmtItemHtml(e) {
@@ -2751,8 +2803,11 @@ function empMgmtItemHtml(e) {
   var gmBadge = e.is_gm ? '<span style="font-size:10px;background:#f3e5ff;color:#6b21a8;padding:2px 7px;border-radius:20px;margin-left:3px;">總經理</span>' : '';
 
   var unitOpts = allUnits.map(function(u){
-    return '<option value="'+u.id+'|'+u.name+'"'+(u.id===e.unit_id?' selected':'')+'>'+u.name+'</option>';
+    var sel = (u.id===e.unit_id) || (u.id==='7' && /^7-/.test(String(e.unit_id||'')));
+    return '<option value="'+u.id+'|'+u.name+'"'+(sel?' selected':'')+'>'+u.name+'</option>';
   }).join('');
+  // 管理部底下有12個細部代號，單位名稱都叫「管理部」，附上代號才分得出來
+  var unitCode = /^7-/.test(String(e.unit_id||'')) ? '（'+e.unit_id+'）' : '';
 
   var toggleActiveBtn = isActive
     ? '<button data-empno="'+e.emp_no+'" onclick="toggleActive(this,false)" style="padding:5px 10px;border:none;border-radius:6px;background:#f8d7da;color:#842029;cursor:pointer;font-size:11px;font-family:inherit;white-space:nowrap;">停用</button>'
@@ -2766,7 +2821,7 @@ function empMgmtItemHtml(e) {
   return '<div data-empno="'+e.emp_no+'" style="background:#fff;border-radius:10px;padding:.85rem 1rem;margin-bottom:.6rem;box-shadow:0 1px 4px rgba(0,0,0,.06);'+(isActive?'':'opacity:.55;')+'">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">' +
       '<div><span style="font-size:14px;font-weight:600;">'+maskName(e.name)+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;">'+e.emp_no+'</span><br>' +
-      '<span style="font-size:11px;color:var(--muted);">'+e.unit_name+' · '+(e.title||'')+'</span></div>' +
+      '<span style="font-size:11px;color:var(--muted);">'+e.unit_name+unitCode+' · '+(e.title||'')+'</span></div>' +
       '<div>'+statusBadge+mgmtBadge+subMgrBadge+hrBadge+gmBadge+'</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr auto;gap:.5rem;margin-bottom:.4rem;align-items:center;">' +
@@ -3148,7 +3203,33 @@ if ('serviceWorker' in navigator) {
 
 /* ═══════════════════════ 證照模組 v120 ═══════════════════════ */
 /* 資料來源：certificates / employee_certificates / employees(job_grade,job_level) */
-const CERT_ONLEAVE = new Set(['1082004','1112012','1132021']); // 育嬰留停：不計發津貼（如有異動請告知調整）
+// 留停（育嬰留停/留職停薪等）期間不計發證照津貼。
+// 不再寫死員編，改由 employee_unpaid_leave 資料表以「今日」自動判斷。
+var CERT_ONLEAVE = new Set();
+var CERT_ONLEAVE_INFO = {};
+function certToday(){
+  var d = new Date();
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
+}
+function certBuildOnLeave(rows){
+  CERT_ONLEAVE = new Set(); CERT_ONLEAVE_INFO = {};
+  var t = certToday();
+  (rows || []).forEach(function(r){
+    if(!r.start_date) return;
+    var ed = r.end_date || '9999-12-31';
+    if(r.start_date <= t && t <= ed){
+      CERT_ONLEAVE.add(r.emp_no);
+      CERT_ONLEAVE_INFO[r.emp_no] = { kind: r.kind || '留停', s: r.start_date, e: r.end_date || '' };
+    }
+  });
+}
+function certLeaveTag(empNo){
+  var i = CERT_ONLEAVE_INFO[empNo];
+  if(!i) return '';
+  return i.kind + (i.e ? '至 ' + i.e : '');
+}
 const CERT_CAP_OTHER = 4, CERT_CAP_TOTAL = 2000, CERT_BASIC = 300, CERT_OTHER = 200;
 
 let CERT_MASTER = [];      // {id,name,category,tier,mgroup,mlogic,hr_only,sort,active}
@@ -3173,6 +3254,9 @@ async function ensureCertData(force){
   CERT_EMP_BY_NO = {}; CERT_EMPS.forEach(function(e){ CERT_EMP_BY_NO[e.emp_no]=e; });
   var recs = await fetchAllRows('employee_certificates','*',null);
   CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason}; });
+  var ul = await sb.from('employee_unpaid_leave').select('emp_no,kind,start_date,end_date');
+  if(ul.error) console.error('unpaid leave load error:', ul.error);
+  certBuildOnLeave(ul.data || []);
   CERT_LOADED = true;
   certInitForm(); certInitStat(); certInitCheck(); certInitHrAdd();
 }
@@ -3247,7 +3331,11 @@ function certRenderMine(){
   document.getElementById('m-cnt').textContent=r.cnt;
   document.getElementById('m-amt').textContent=r.amt.toLocaleString();
   document.getElementById('m-amtsub').textContent='基本 '+r.basic+' 張 · 其他 '+r.other+' 張';
-  document.getElementById('m-cap').innerHTML = r.capped ? '<div class="note">證照津貼上限為每人 <b>2,000 元</b>，你已達上限，實發 <b>2,000 元</b>。</div>' : '';
+  var capHtml = r.capped ? '<div class="note">證照津貼上限為每人 <b>2,000 元</b>，你已達上限，實發 <b>2,000 元</b>。</div>' : '';
+  if(CERT_ONLEAVE.has(no)){
+    capHtml = '<div class="note">目前為<b>' + cEsc(certLeaveTag(no)) + '</b>期間，證照津貼暫不計發（應領金額 ' + r.raw.toLocaleString() + ' 元），復職後自動恢復。</div>' + capHtml;
+  }
+  document.getElementById('m-cap').innerHTML = capHtml;
   var mine=CERT_RECORDS.filter(function(x){return x.emp_no===no && x.status==='pending';});
   document.getElementById('m-pending').innerHTML = mine.length ? mine.map(function(p){ var c=CERT_BY_ID[p.certificate_id]||{name:'?'};
     return '<div class="cert-item pending"><div class="cert-head"><div class="cert-name">'+cEsc(c.name)+'</div><span class="badge badge-pending">待人資審核</span></div><div class="cert-meta">取得年份　民國 '+p.year+' 年</div></div>';
@@ -3410,14 +3498,15 @@ function certRenderStat(){
   document.getElementById('s-list').innerHTML=out;
 }
 function certRowHtml(x){ var e=x.e, r=x.r, leave=CERT_ONLEAVE.has(e.emp_no);
-  return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(maskName(e.name))+'<span class="pmeta">'+cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
+  var meta = cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+(leave?' · '+cEsc(certLeaveTag(e.emp_no)):'');
+  return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(maskName(e.name))+'<span class="pmeta">'+meta+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
 }
 function certExportStat(){
   var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e,r:certCalc(e.emp_no)};})
     .sort(function(a,b){return certUnitOrder(a.e.unit_id)-certUnitOrder(b.e.unit_id)||a.e.emp_no.localeCompare(b.e.emp_no);});
   var head=['員編','姓名','單位','職稱','職等','職級','證照張數','證照津貼(元)','狀態'];
   var lines=[head.join(',')];
-  rows.forEach(function(x){ var e=x.e,r=x.r; var st=CERT_ONLEAVE.has(e.emp_no)?'留停':(r.amt>0?'領取':'—');
+  rows.forEach(function(x){ var e=x.e,r=x.r; var st=CERT_ONLEAVE.has(e.emp_no)?certLeaveTag(e.emp_no):(r.amt>0?'領取':'—');
     lines.push([e.emp_no,e.name,e.unit_name,e.title,(e.grade==null?'':e.grade),(e.level==null?'':e.level),r.cnt,r.amt,st].map(certCsvCell).join(',')); });
   certDownloadCsv('員工證照與津貼統計表.csv', lines.join('\r\n'));
   cToast('已匯出 統計表 CSV');
