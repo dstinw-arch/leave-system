@@ -1474,7 +1474,7 @@ function updateSubtype() {
 // ── 代理人可用性檢查：代理人在申請期間若也請假（核准或審核中）→ 擋下改選 ──
 async function proxyLeaveConflict(proxyEmpNo, startDate, endDate) {
   try {
-    var r = await sb.from('leave_requests')
+    var r = await sb.from('leave_calendar')
       .select('start_date,end_date,leave_type,leave_subtype,status')
       .eq('emp_no', proxyEmpNo)
       .in('status', ['approved','pending'])
@@ -2213,7 +2213,7 @@ async function loadCalendar() {
     }
     calEmpNos = calEmpNos.filter(function(v,i,a){ return a.indexOf(v)===i; });
     if (calEmpNos.length > 0) {
-      var res = await sb.from('leave_requests').select('*')
+      var res = await sb.from('leave_calendar').select('*')
         .in('emp_no', calEmpNos)
         .in('status', ['pending', 'approved']);
       allUnitLeaves = res.data || [];
@@ -2222,7 +2222,7 @@ async function loadCalendar() {
     }
   }
 
-  var proxyRes = await sb.from('leave_requests').select('*')
+  var proxyRes = await sb.from('leave_calendar').select('*')
     .eq('proxy_name', currentUser.name).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
