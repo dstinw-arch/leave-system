@@ -833,6 +833,9 @@ async function hashPw(pw) {
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// 姓名正規化：去除全形／半形空白，比對姓名一律用這個（避免「林　璇」與「林璇」被當成不同人）
+function normName(n){ return (n==null?'':String(n)).replace(/[\s\u3000]/g,''); }
+
 // 姓名遮罩：僅供畫面顯示，嚴禁用於報表匯出或寫入資料庫
 function maskName(n){
   n = (n==null?'':String(n));
@@ -1506,7 +1509,7 @@ async function confirmLeave() {
   const endTime = document.getElementById('apply-end-time').value;
   const days = parseFloat(document.getElementById('apply-days').value);
   const reason = document.getElementById('apply-reason').value.trim();
-  const proxyName = document.getElementById('apply-proxy-name').value.trim();
+  const proxyName = normName(document.getElementById('apply-proxy-name').value);
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
   if (!startDate||!endDate||isNaN(days)||days<=0||!reason||!proxyName||!proxyDuty) {
     errEl.textContent='請填寫所有必要欄位（含代理人姓名與擔任事務）';
@@ -1587,7 +1590,7 @@ async function doSubmitLeave() {
   const endTime = document.getElementById('apply-end-time').value;
   const days = parseFloat(document.getElementById('apply-days').value);
   const reason = document.getElementById('apply-reason').value.trim();
-  const proxyName = document.getElementById('apply-proxy-name').value.trim();
+  const proxyName = normName(document.getElementById('apply-proxy-name').value);
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
   const errEl = document.getElementById('apply-error');
   // 二次防線：擋假日（避免繞過 confirmLeave）
@@ -1778,7 +1781,7 @@ async function loadHrAll() {
   allHrEmps = (empRes.data||[]).filter(function(e){ return e.is_active !== false; });
   (empRes.data||[]).forEach(function(e){
     empCache[e.emp_no] = {title: e.title||'', duty: e.duty||''};
-    empProxyCache[e.name] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
+    empProxyCache[normName(e.name)] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
     empUnitCache[e.emp_no] = e.unit_name || '';
   });
   var FIXED_UNITS = [["7","管理部"], ["16","營業部"], ["25","水碓分社"], ["34","竹圍分社"], ["43","英專分社"], ["52","義山分社"], ["61","三芝分社"], ["70","八里分社"], ["89","成州分社"], ["98","五股分社"], ["104","萬金分社"], ["113","新莊分社"], ["122","泰山分社"], ["131","林口分社"], ["140","板橋分社"], ["159","蘆洲分社"], ["168","三重分社"]];
@@ -1809,7 +1812,7 @@ function filterHrLeaves() {
   var leaveType = document.getElementById('hr-filter-leave-type').value;
   var filtered = allHrLeaves;
   if (unit) filtered = filtered.filter(function(r){ return empCurrentUnit(r) === unit; });
-  if (emp) filtered = filtered.filter(function(r){ return r.emp_name === emp; });
+  if (emp) filtered = filtered.filter(function(r){ return normName(r.emp_name) === normName(emp); });
   filtered = filtered.slice().sort(function(a,b){ return docNoKey(b.doc_no) - docNoKey(a.doc_no); });
   if (status === 'unconfirmed') {
     filtered = filtered.filter(function(r){ return !r.paper_confirmed && r.status === 'approved'; });
@@ -2223,10 +2226,10 @@ async function loadCalendar() {
   }
 
   var proxyRes = await sb.from('leave_calendar').select('*')
-    .eq('proxy_name', currentUser.name).eq('status','approved');
+    .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v151';
+  if (dbg) dbg.textContent = 'v152';
   renderCalendar();
 }
 
@@ -2452,9 +2455,9 @@ function downloadLeaves() {
       r.start_date||'', r.end_date||'', r.days||'',
       r.start_time||'', r.end_time||'',
       r.proxy_name||'',
-      r.proxy_emp_no || (empProxyCache[r.proxy_name]||{}).emp_no || '',
-      r.proxy_unit || (empProxyCache[r.proxy_name]||{}).unit_name || '',
-      r.proxy_title || (empProxyCache[r.proxy_name]||{}).title || '',
+      r.proxy_emp_no || (empProxyCache[normName(r.proxy_name)]||{}).emp_no || '',
+      r.proxy_unit || (empProxyCache[normName(r.proxy_name)]||{}).unit_name || '',
+      r.proxy_title || (empProxyCache[normName(r.proxy_name)]||{}).title || '',
       r.proxy_duty||'',
       r.reviewed_by||'', gmReviewDate
     ];
@@ -2528,7 +2531,7 @@ async function importLeaves(input) {
       if (!cols || cols.length < 13) { skipped++; continue; }
 
       var empNo = String(cols[3]||'').trim().replace('.0','');
-      var empName = String(cols[2]||'').trim();
+      var empName = normName(cols[2]);
       var unitName = String(cols[4]||'').trim();
       var leaveType = String(cols[7]||'').trim();
       var leaveSubtype = String(cols[8]||'').trim();
@@ -2543,7 +2546,7 @@ async function importLeaves(input) {
       var startTime = parseTime(cols[13]);
       var endTime = parseTime(cols[14]);
 
-      var proxyName = String(cols[15]||'').trim();
+      var proxyName = normName(cols[15]);
       var proxyDuty = cols[19] ? String(cols[19]).trim() : '';
 
       if (!empNo || !startDate || !leaveType) { skipped++; continue; }
