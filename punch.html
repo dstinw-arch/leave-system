@@ -245,7 +245,7 @@ a.map{color:var(--blue)}
 </div>
 
 <script>
-const PUNCH_VER = 'punch v4';
+const PUNCH_VER = 'punch v5';
 const SUPABASE_URL = 'https://nloegbeggwyprtqickqs.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -305,6 +305,7 @@ setInterval(tick,1000); tick();
 (async function init(){
   const q=new URLSearchParams(location.search);
   if(q.get('p')&&q.get('c')){ sessionStorage.setItem(PENDING_KEY,JSON.stringify({p:q.get('p'),c:q.get('c')})); history.replaceState(null,'',location.pathname); }
+  else if(q.get('t')){ sessionStorage.setItem(PENDING_KEY,JSON.stringify({t:q.get('t')})); history.replaceState(null,'',location.pathname); }
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ show('v-login',true); return; }
   await afterLogin();
@@ -366,7 +367,8 @@ async function afterLogin(){
     $('pp-month').value=prevYm(ym); $('pp-ot-date').value=prevYm(ym)+'-01';
   }
   tab(isTester?'punch':canReview?'review':'paper');
-  if(pend && isTester){ sessionStorage.removeItem(PENDING_KEY); const {p,c}=JSON.parse(pend); await punchNfc(p,c); }
+  if(pend && isTester){ sessionStorage.removeItem(PENDING_KEY); const pd=JSON.parse(pend);
+    if(pd.t) await punchTag(pd.t); else await punchNfc(pd.p,pd.c); }
 }
 
 // ---------- 頂端提醒 ----------
@@ -409,6 +411,12 @@ function punchMsg(j,okTitle){
 async function punchNfc(p,c){
   result('wait','打卡中…','正在驗證標籤');
   try{ const j=await api({action:'punch',mode:'nfc',picc:p,cmac:c}); const [a,b]=punchMsg(j,'打卡成功'); result('ok',a,b); if(navigator.vibrate) navigator.vibrate(120); }
+  catch(e){ result('err','打卡失敗',e.message); }
+  loadToday();
+}
+async function punchTag(t){
+  result('wait','打卡中…','正在確認標籤');
+  try{ const j=await api({action:'punch',mode:'tag',t}); const [a,b]=punchMsg(j,'打卡成功'); result('ok',a,b); if(navigator.vibrate) navigator.vibrate(120); }
   catch(e){ result('err','打卡失敗',e.message); }
   loadToday();
 }
