@@ -245,7 +245,7 @@ a.map{color:var(--blue)}
 </div>
 
 <script>
-const PUNCH_VER = 'punch v3';
+const PUNCH_VER = 'punch v4';
 const SUPABASE_URL = 'https://nloegbeggwyprtqickqs.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -481,7 +481,10 @@ function judgeDay(day,recs,leave){
   const valid=recs.filter(r=>r.status==='ok'||r.status==='approved');
   const type=dayType(day);
   const out={in:null,out:null,tags:[]};
-  if(valid.length){ out.in=valid[0].punched_at; if(valid.length>1) out.out=valid[valid.length-1].punched_at; }
+  // 依時間判斷上下班：13:00 前的第一筆為上班卡；12:00 後的最後一筆（且不是上班那筆）為下班卡
+  const first=valid[0], last=valid[valid.length-1];
+  if(first && mins(hm(first.punched_at))<mins('13:00')) out.in=first.punched_at;
+  if(last && mins(hm(last.punched_at))>=mins('12:00') && last.punched_at!==out.in) out.out=last.punched_at;
   if(type!=='work'){ out.tags.push(['hol',HOLIDAYS[day]||'休息日']); return out; }
   if(leave&&leave.kind==='full'){ out.tags.push(['leave',leave.label]); return out; }
   let lateAfter=RULE.lateAfter, earlyBefore=RULE.earlyBefore;
@@ -489,8 +492,9 @@ function judgeDay(day,recs,leave){
   if(leave&&leave.kind==='pmOff'){ earlyBefore=RULE.pmOffOut; out.tags.push(['leave','下午'+leave.label]); }
   if(day>ymd(new Date())) return out;
   if(!valid.length){ out.tags.push(['miss','未打卡']); return out; }
-  if(mins(hm(out.in))>mins(lateAfter)) out.tags.push(['late','遲到']);
   const isToday = day===ymd(new Date());
+  if(!out.in) out.tags.push(['miss','缺上班卡']);
+  else if(mins(hm(out.in))>mins(lateAfter)) out.tags.push(['late','遲到']);
   if(!out.out){ if(!isToday) out.tags.push(['miss','缺下班卡']); }
   else if(mins(hm(out.out))<mins(earlyBefore)) out.tags.push(['late','早退']);
   return out;
