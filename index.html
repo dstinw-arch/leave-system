@@ -2229,7 +2229,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v152';
+  if (dbg) dbg.textContent = 'v153';
   renderCalendar();
 }
 
@@ -3227,6 +3227,19 @@ function certBuildOnLeave(rows){
     if(r.start_date <= t && t <= ed){
       CERT_ONLEAVE.add(r.emp_no);
       CERT_ONLEAVE_INFO[r.emp_no] = { kind: r.kind || '留停', s: r.start_date, e: r.end_date || '' };
+    }
+  });
+  // v153：延長留停是另建一筆接續期間，顯示到期日要一路接到最後一段
+  function _nextDay(ds){ var p=ds.split('-'); var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]+1)); return d.toISOString().slice(0,10); }
+  Object.keys(CERT_ONLEAVE_INFO).forEach(function(no){
+    var info = CERT_ONLEAVE_INFO[no], moved = true;
+    while(info.e && moved){
+      moved = false;
+      (rows || []).forEach(function(r){
+        if(r.emp_no !== no || !r.start_date) return;
+        var re = r.end_date || '';
+        if(r.start_date <= _nextDay(info.e) && (!re || re > info.e)){ info.e = re; moved = true; }
+      });
     }
   });
 }
