@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#379392">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<title>打卡（測試中）</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --teal:#379392; --teal-dark:#2a7372; --sky:#4FB0C6; --blue:#4F86C6; --purple:#6C49B8;
+  --mint:#67D5B5; --coral:#EE7785; --lilac:#C89EC4;
+  --bg:#eef7f6; --card:#ffffff; --text:#1f3d3c; --sub:#5a7d7c; --line:#d5e9e7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px}
+.test-bar{background:repeating-linear-gradient(45deg,#EE7785,#EE7785 12px,#f08b97 12px,#f08b97 24px);color:#fff;text-align:center;font-weight:700;font-size:15px;padding:6px;letter-spacing:2px}
+header{background:linear-gradient(135deg,var(--teal),var(--blue));color:#fff;padding:18px 16px 22px}
+header h1{font-size:22px;display:flex;align-items:center;gap:8px}
+header h1 .tag{font-size:13px;background:#fff;color:var(--coral);border-radius:20px;padding:2px 10px;font-weight:700}
+header .who{margin-top:6px;font-size:15px;opacity:.95;display:flex;justify-content:space-between;align-items:center}
+header .who button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:16px;padding:4px 12px;font-size:13px}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+.tabs{display:flex;gap:6px;margin:-12px 0 14px;position:relative}
+.tabs button{flex:1;border:0;background:#fff;color:var(--sub);padding:12px 4px;border-radius:12px;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(55,147,146,.12)}
+.tabs button.on{background:var(--purple);color:#fff}
+.card{background:var(--card);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(55,147,146,.10)}
+.card h2{font-size:17px;margin-bottom:12px;color:var(--teal-dark)}
+.clock{text-align:center;font-size:44px;font-weight:700;color:var(--teal-dark);font-variant-numeric:tabular-nums}
+.date{text-align:center;color:var(--sub);font-size:16px;margin-top:2px}
+.result{border-radius:14px;padding:18px;text-align:center;margin-top:14px;display:none}
+.result.ok{display:block;background:#e3f8f1;border:2px solid var(--mint)}
+.result.err{display:block;background:#fdecef;border:2px solid var(--coral)}
+.result.wait{display:block;background:#eaf3fb;border:2px solid var(--sky)}
+.result .big{font-size:24px;font-weight:700;margin-bottom:4px}
+.result.ok .big{color:#22916f}.result.err .big{color:#c74557}.result.wait .big{color:var(--blue)}
+.result .small{font-size:15px;color:var(--sub)}
+.hint{background:#f3eef9;border-left:4px solid var(--lilac);border-radius:8px;padding:12px;font-size:15px;line-height:1.6;color:#4d3b6b}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:16px;font-size:18px;font-weight:700;color:#fff;background:var(--teal)}
+.btn.blue{background:var(--blue)}.btn.purple{background:var(--purple)}
+.btn:disabled{opacity:.5}
+input,select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font-size:17px;margin-bottom:10px;background:#fff;color:var(--text)}
+label{display:block;font-size:14px;color:var(--sub);margin-bottom:4px}
+.today{display:flex;gap:10px}
+.today div{flex:1;background:var(--bg);border-radius:12px;padding:12px;text-align:center}
+.today b{display:block;font-size:24px;color:var(--teal-dark);font-variant-numeric:tabular-nums}
+.today span{font-size:14px;color:var(--sub)}
+.day{border-bottom:1px solid var(--line);padding:12px 0}
+.day:last-child{border-bottom:0}
+.day .d{font-weight:700;font-size:16px;display:flex;justify-content:space-between}
+.day .d em{font-style:normal;font-size:14px;color:var(--sub);font-weight:400}
+.day .io{display:flex;gap:14px;margin-top:4px;font-size:16px}
+.day .io .in{color:#22916f}.day .io .out{color:var(--blue)}
+.punch-list{margin-top:6px;font-size:14px;color:var(--sub);line-height:1.8}
+.pill{display:inline-block;font-size:12px;border-radius:10px;padding:1px 8px;color:#fff;margin-right:4px;vertical-align:1px}
+.pill.nfc{background:var(--teal)}.pill.gps{background:var(--purple)}
+a.map{color:var(--blue)}
+.row2{display:flex;gap:10px}.row2>div{flex:1}
+.empty{text-align:center;color:var(--sub);padding:20px 0}
+.hide{display:none!important}
+.err-text{color:#c74557;font-size:15px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="test-bar">測試中</div>
+<header>
+  <div class="wrap">
+    <h1>打卡 <span class="tag">測試中</span></h1>
+    <div class="who"><span id="who">　</span><button id="btn-logout" class="hide" onclick="logout()">登出</button></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- 登入 -->
+  <div id="v-login" class="card hide" style="margin-top:16px">
+    <h2>請先登入（與請假系統同一組帳密）</h2>
+    <label>員工編號</label><input id="l-emp" inputmode="numeric" autocomplete="username">
+    <label>密碼</label><input id="l-pw" type="password" autocomplete="current-password">
+    <div id="l-err" class="err-text hide"></div>
+    <button class="btn" onclick="login()">登入</button>
+  </div>
+
+  <div id="v-msg" class="card hide" style="margin-top:16px"></div>
+
+  <div id="v-app" class="hide">
+    <div class="tabs">
+      <button data-t="punch" class="on" onclick="tab('punch')">打卡</button>
+      <button data-t="mine" onclick="tab('mine')">我的紀錄</button>
+      <button data-t="all" id="tab-all" class="hide" onclick="tab('all')">全員紀錄</button>
+    </div>
+
+    <!-- 打卡 -->
+    <section id="t-punch">
+      <div class="card">
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date" id="date"></div>
+        <div id="result" class="result"><div class="big"></div><div class="small"></div></div>
+      </div>
+      <div class="card">
+        <h2>今天</h2>
+        <div class="today">
+          <div><span>上班</span><b id="td-in">--:--</b></div>
+          <div><span>下班</span><b id="td-out">--:--</b></div>
+          <div><span>次數</span><b id="td-n">0</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>定點打卡</h2>
+        <div class="hint">手機靠近辦公室的打卡標籤，會自動開啟此頁並完成打卡。<br>iPhone：直接靠近即可。Android：需開啟 NFC。</div>
+      </div>
+      <div class="card">
+        <h2>外出打卡</h2>
+        <label>事由（選填）</label>
+        <input id="gps-note" maxlength="50" placeholder="例：拜訪客戶、送件">
+        <button class="btn purple" id="btn-gps" onclick="punchGps()">📍 取得定位並打卡</button>
+      </div>
+    </section>
+
+    <!-- 我的紀錄 -->
+    <section id="t-mine" class="hide">
+      <div class="card">
+        <label>月份</label>
+        <input type="month" id="m-month" onchange="loadMine()">
+        <div id="m-list"></div>
+      </div>
+    </section>
+
+    <!-- 全員紀錄 -->
+    <section id="t-all" class="hide">
+      <div class="card">
+        <div class="row2">
+          <div><label>開始日</label><input type="date" id="a-from"></div>
+          <div><label>結束日</label><input type="date" id="a-to"></div>
+        </div>
+        <div class="row2">
+          <div><button class="btn blue" onclick="loadAll()">查詢</button></div>
+          <div><button class="btn" onclick="exportXlsx()">匯出 Excel</button></div>
+        </div>
+      </div>
+      <div class="card"><div id="a-list"><div class="empty">請選擇日期後查詢</div></div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const PUNCH_VER = 'punch v1';
+const SUPABASE_URL = 'https://nloegbeggwyprtqickqs.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_sTXYbDGJ006QGbausAlC-w_fYnWjbfW';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const TZ = 'Asia/Taipei';
+const PENDING_KEY = 'punch_pending_nfc';
+let me = null, allRows = [], empMap = {};
+
+// ---------- 工具 ----------
+function maskName(n){ n=(n==null?'':String(n)); const a=Array.from(n);
+  if(a.length<=1) return n; if(a.length===2) return a[0]+'O'; return a[0]+'O'.repeat(a.length-2)+a[a.length-1]; }
+function ymd(d){ return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(d)); }
+function hm(d){ return new Intl.DateTimeFormat('zh-TW',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(d)); }
+function hms(d){ return new Intl.DateTimeFormat('zh-TW',{timeZone:TZ,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(d)); }
+function roc(ymdStr){ const [y,m,d]=ymdStr.split('-'); return (Number(y)-1911)+'/'+m+'/'+d; }
+function wk(ymdStr){ return '日一二三四五六'[new Date(ymdStr+'T12:00:00+08:00').getDay()]; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function show(id,on){ document.getElementById(id).classList.toggle('hide',!on); }
+function result(kind,big,small){ const r=document.getElementById('result'); r.className='result '+kind;
+  r.querySelector('.big').textContent=big; r.querySelector('.small').textContent=small||''; }
+
+// 民國日期換算：台北時區的某日 00:00 / 隔日 00:00
+function dayStartIso(ymdStr){ return new Date(ymdStr+'T00:00:00+08:00').toISOString(); }
+function nextDayIso(ymdStr){ const d=new Date(ymdStr+'T00:00:00+08:00'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString(); }
+
+// ---------- 時鐘 ----------
+function tick(){ const n=new Date(); document.getElementById('clock').textContent=hms(n);
+  const s=ymd(n); document.getElementById('date').textContent='民國 '+roc(s)+'（'+wk(s)+'）'; }
+setInterval(tick,1000); tick();
+
+// ---------- 啟動 ----------
+(async function init(){
+  // 標籤網址帶來的加密參數，先暫存並清掉網址（避免重新整理時重送）
+  const q=new URLSearchParams(location.search);
+  if(q.get('p') && q.get('c')){
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({p:q.get('p'),c:q.get('c')}));
+    history.replaceState(null,'',location.pathname);
+  }
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ show('v-login',true); return; }
+  await afterLogin();
+})();
+
+async function login(){
+  let emp=document.getElementById('l-emp').value.trim(); const pw=document.getElementById('l-pw').value;
+  const err=document.getElementById('l-err'); err.classList.add('hide');
+  if(emp.length===6) emp='0'+emp;
+  if(!emp||!pw){ err.textContent='請填寫員工編號與密碼'; err.classList.remove('hide'); return; }
+  const { error } = await sb.auth.signInWithPassword({ email: emp+'@tsc1918.local', password: pw });
+  if(error){ err.textContent='員工編號或密碼錯誤'; err.classList.remove('hide'); return; }
+  show('v-login',false); await afterLogin();
+}
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+function msg(html){ const m=document.getElementById('v-msg'); m.innerHTML=html; show('v-msg',true); }
+
+async function afterLogin(){
+  const { data:{ user } } = await sb.auth.getUser();
+  const { data:emp } = await sb.from('employees')
+    .select('emp_no,name,unit_id,unit_name,is_hr,is_gm,is_manager,is_sub_manager,must_change_pw,is_active')
+    .eq('auth_user_id', user.id).maybeSingle();
+  if(!emp || emp.is_active===false){ msg('<h2>查無員工資料</h2>請聯絡人事部門。'); return; }
+  me=emp;
+  document.getElementById('who').textContent=maskName(emp.name)+'　'+(emp.unit_name||'');
+  show('btn-logout',true);
+  if(emp.must_change_pw){ msg('<h2>請先變更密碼</h2>請先到請假系統登入並設定新密碼，再回來打卡。<br><br><a href="./" class="btn" style="text-align:center;text-decoration:none">前往請假系統</a>'); return; }
+  const { data:t } = await sb.from('punch_testers').select('emp_no').eq('emp_no',emp.emp_no).maybeSingle();
+  if(!t){ msg('<h2>尚未開放</h2>打卡功能目前測試中，您不在測試名單內。'); return; }
+
+  const canAll = emp.is_hr||emp.is_gm||emp.is_manager||emp.is_sub_manager||['0871004','0881032'].includes(emp.emp_no);
+  show('tab-all',canAll);
+  show('v-app',true);
+  const today=ymd(new Date());
+  document.getElementById('m-month').value=today.slice(0,7);
+  document.getElementById('a-from').value=today.slice(0,8)+'01';
+  document.getElementById('a-to').value=today;
+
+  const pend=sessionStorage.getItem(PENDING_KEY);
+  if(pend){ sessionStorage.removeItem(PENDING_KEY); const {p,c}=JSON.parse(pend); await punchNfc(p,c); }
+  else await loadToday();
+}
+
+// ---------- 打卡 ----------
+async function callPunch(body){
+  const { data:{ session } } = await sb.auth.getSession();
+  const r = await fetch(SUPABASE_URL+'/functions/v1/punch',{ method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token, 'apikey':SUPABASE_KEY },
+    body: JSON.stringify(body) });
+  let j={}; try{ j=await r.json(); }catch(e){}
+  if(!r.ok || !j.ok) throw new Error(j.error||('連線失敗（'+r.status+'）'));
+  return j;
+}
+async function punchNfc(p,c){
+  result('wait','打卡中…','正在驗證標籤');
+  try{
+    const j=await callPunch({ mode:'nfc', picc:p, cmac:c });
+    result('ok', (j.duplicate?'已打過卡 ':'打卡成功 ')+hm(j.punched_at), (j.location_name||'')+(j.duplicate?'（60 秒內重複感應，不另記錄）':''));
+    if(navigator.vibrate) navigator.vibrate(120);
+  }catch(e){ result('err','打卡失敗', e.message); }
+  await loadToday();
+}
+function punchGps(){
+  if(!navigator.geolocation){ result('err','無法定位','此裝置不支援定位'); return; }
+  const btn=document.getElementById('btn-gps'); btn.disabled=true;
+  result('wait','定位中…','請允許瀏覽器使用位置');
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    try{
+      const j=await callPunch({ mode:'gps', lat:pos.coords.latitude, lng:pos.coords.longitude,
+        accuracy:pos.coords.accuracy, note:document.getElementById('gps-note').value.trim()||'外出' });
+      result('ok',(j.duplicate?'已打過卡 ':'外出打卡成功 ')+hm(j.punched_at),(j.location_name||'')+'（誤差約 '+Math.round(pos.coords.accuracy)+' 公尺）');
+      document.getElementById('gps-note').value='';
+    }catch(e){ result('err','打卡失敗',e.message); }
+    btn.disabled=false; loadToday();
+  }, err=>{
+    btn.disabled=false;
+    result('err','無法取得定位', err.code===1?'請到手機設定允許此網頁使用位置':'定位逾時，請到室外或稍後再試');
+  }, { enableHighAccuracy:true, timeout:20000, maximumAge:0 });
+}
+
+// ---------- 讀取（分頁避免 1000 筆上限） ----------
+async function fetchRecords(fromIso,toIso,empNo){
+  const out=[]; let from=0; const size=1000;
+  while(true){
+    let q=sb.from('punch_records').select('id,emp_no,punched_at,method,location_name,lat,lng,accuracy_m')
+      .gte('punched_at',fromIso).lt('punched_at',toIso).order('punched_at',{ascending:true}).range(from,from+size-1);
+    if(empNo) q=q.eq('emp_no',empNo);
+    const { data, error } = await q; if(error) throw error;
+    out.push(...data); if(data.length<size) break; from+=size;
+  }
+  return out;
+}
+function groupDays(rows){ const g={}; rows.forEach(r=>{ const k=ymd(r.punched_at); (g[k]=g[k]||[]).push(r); }); return g; }
+function mapLink(r){ return (r.lat!=null)?' <a class="map" target="_blank" href="https://maps.google.com/?q='+r.lat+','+r.lng+'">地圖</a>':''; }
+
+async function loadToday(){
+  const t=ymd(new Date());
+  try{
+    const rows=await fetchRecords(dayStartIso(t),nextDayIso(t),me.emp_no);
+    document.getElementById('td-n').textContent=rows.length;
+    document.getElementById('td-in').textContent=rows.length?hm(rows[0].punched_at):'--:--';
+    document.getElementById('td-out').textContent=rows.length>1?hm(rows[rows.length-1].punched_at):'--:--';
+  }catch(e){}
+}
+
+async function loadMine(){
+  const m=document.getElementById('m-month').value; if(!m) return;
+  const box=document.getElementById('m-list'); box.innerHTML='<div class="empty">讀取中…</div>';
+  const [y,mo]=m.split('-').map(Number);
+  const start=m+'-01', endD=new Date(Date.UTC(y,mo,1)); const end=endD.toISOString().slice(0,10);
+  try{
+    const rows=await fetchRecords(dayStartIso(start),dayStartIso(end),me.emp_no);
+    const g=groupDays(rows); const days=Object.keys(g).sort().reverse();
+    if(!days.length){ box.innerHTML='<div class="empty">這個月沒有打卡紀錄</div>'; return; }
+    box.innerHTML=days.map(d=>{ const a=g[d];
+      return '<div class="day"><div class="d">'+roc(d)+'（'+wk(d)+'）<em>'+a.length+' 次</em></div>'+
+        '<div class="io"><span class="in">上班 '+hm(a[0].punched_at)+'</span>'+(a.length>1?'<span class="out">下班 '+hm(a[a.length-1].punched_at)+'</span>':'')+'</div>'+
+        '<div class="punch-list">'+a.map(r=>hms(r.punched_at)+' <span class="pill '+r.method+'">'+(r.method==='nfc'?'定點':'外出')+'</span>'+esc(r.location_name||'')+mapLink(r)).join('<br>')+'</div></div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="empty">讀取失敗：'+esc(e.message)+'</div>'; }
+}
+
+async function loadEmpMap(){
+  if(Object.keys(empMap).length) return;
+  const { data } = await sb.from('employees').select('emp_no,name,unit_id,unit_name');
+  (data||[]).forEach(e=>empMap[e.emp_no]=e);
+}
+async function loadAll(){
+  const f=document.getElementById('a-from').value, t=document.getElementById('a-to').value;
+  const box=document.getElementById('a-list');
+  if(!f||!t||f>t){ box.innerHTML='<div class="empty">日期區間有誤</div>'; return; }
+  box.innerHTML='<div class="empty">讀取中…</div>';
+  try{
+    await loadEmpMap();
+    allRows=await fetchRecords(dayStartIso(f),nextDayIso(t),null);
+    if(!allRows.length){ box.innerHTML='<div class="empty">此區間沒有打卡紀錄</div>'; return; }
+    const g=groupDays(allRows); const days=Object.keys(g).sort().reverse();
+    box.innerHTML=days.map(d=>{
+      const byEmp={}; g[d].forEach(r=>(byEmp[r.emp_no]=byEmp[r.emp_no]||[]).push(r));
+      return '<div class="day"><div class="d">'+roc(d)+'（'+wk(d)+'）<em>'+Object.keys(byEmp).length+' 人</em></div>'+
+        '<div class="punch-list">'+Object.keys(byEmp).sort().map(no=>{ const a=byEmp[no], e=empMap[no]||{};
+          const gps=a.some(r=>r.method==='gps');
+          return esc(maskName(e.name||no))+'　上 '+hm(a[0].punched_at)+(a.length>1?'　下 '+hm(a[a.length-1].punched_at):'')+
+            (gps?' <span class="pill gps">含外出</span>':'');
+        }).join('<br>')+'</div></div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="empty">讀取失敗：'+esc(e.message)+'</div>'; }
+}
+
+function exportXlsx(){
+  if(!allRows.length){ alert('請先查詢'); return; }
+  const f=document.getElementById('a-from').value, t=document.getElementById('a-to').value;
+  // 彙總（Excel 用真實姓名）
+  const g={}; allRows.forEach(r=>{ const k=ymd(r.punched_at)+'|'+r.emp_no; (g[k]=g[k]||[]).push(r); });
+  const sum=Object.keys(g).sort().map(k=>{ const [d,no]=k.split('|'), a=g[k], e=empMap[no]||{};
+    return { '日期':roc(d), '星期':wk(d), '單位':e.unit_name||'', '員工編號':no, '姓名':e.name||'',
+      '上班':hm(a[0].punched_at), '下班':a.length>1?hm(a[a.length-1].punched_at):'', '打卡次數':a.length,
+      '含外出':a.some(r=>r.method==='gps')?'是':'' }; });
+  const det=allRows.map(r=>{ const e=empMap[r.emp_no]||{}; const d=ymd(r.punched_at);
+    return { '日期':roc(d), '時間':hms(r.punched_at), '單位':e.unit_name||'', '員工編號':r.emp_no, '姓名':e.name||'',
+      '方式':r.method==='nfc'?'定點(NFC)':'外出(GPS)', '地點/事由':r.location_name||'',
+      '緯度':r.lat??'', '經度':r.lng??'', '誤差(公尺)':r.accuracy_m!=null?Math.round(r.accuracy_m):'' }; });
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(sum); ws1['!cols']=[{wch:11},{wch:5},{wch:10},{wch:10},{wch:8},{wch:7},{wch:7},{wch:8},{wch:7}];
+  const ws2=XLSX.utils.json_to_sheet(det); ws2['!cols']=[{wch:11},{wch:10},{wch:10},{wch:10},{wch:8},{wch:11},{wch:16},{wch:11},{wch:11},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws1,'每日彙總'); XLSX.utils.book_append_sheet(wb,ws2,'打卡明細');
+  XLSX.writeFile(wb,'打卡紀錄_'+roc(f).replace(/\//g,'')+'-'+roc(t).replace(/\//g,'')+'.xlsx');
+}
+
+// ---------- 分頁 ----------
+function tab(t){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  ['punch','mine','all'].forEach(x=>show('t-'+x,x===t));
+  if(t==='mine') loadMine();
+  if(t==='punch') loadToday();
+}
+</script>
+</body>
+</html>
