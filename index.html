@@ -2240,7 +2240,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v154';
+  if (dbg) dbg.textContent = 'v155';
   renderCalendar();
 }
 
@@ -2342,7 +2342,9 @@ function showCalDay(ds) {
         : '';
       return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
-        '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name?maskName(r.proxy_name):'—')+'</div>' +
+        '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name?maskName(r.proxy_name):'—')+
+        // v155：可審核的假單顯示事由，主管審核時看得到
+        (canReview ? '<br>事由：'+(tpEsc(r.reason||'').replace(/\r?\n/g,'<br>')||'—') : '')+'</div>' +
         reviewBtns + '</div>';
     }).join('');
   }
