@@ -2240,7 +2240,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v155';
+  if (dbg) dbg.textContent = 'v157';
   renderCalendar();
 }
 
@@ -2334,6 +2334,21 @@ function showCalDay(ds) {
                       (r.reviewer_type === 'mgmt' && r.reviewer_emp_no === currentUser.emp_no);
         }
       }
+      // v156：在自己審核範圍內的假單（不分狀態）都顯示事由；長官的不顯示
+      var showReason = false;
+      if (isMgrView && !isMgmtStaff && r.emp_no !== currentUser.emp_no) {
+        if (currentUser.emp_no === CHAIRMAN_EMP_NO) {
+          showReason = r.reviewer_type === 'chairman';
+        } else if (currentUser.emp_no === GM_EMP_NO) {
+          showReason = r.reviewer_type === 'gm';
+        } else if (currentUser.is_gm) {
+          showReason = r.reviewer_emp_no === currentUser.emp_no;
+        } else if (currentUser.is_manager || currentUser.is_sub_manager) {
+          showReason = (r.reviewer_type === 'unit' && r.unit_id === currentUser.unit_id) ||
+                       r.reviewer_emp_no === currentUser.emp_no;
+        }
+      }
+      if (canReview || r.emp_no === currentUser.emp_no) showReason = true; // v157：自己的假單也顯示事由
       var reviewBtns = canReview
         ? '<div style="margin-top:.5rem;display:flex;gap:8px">' +
           '<button onclick="calApprove(\'' + r.id + '\')" style="flex:1;padding:7px;background:#1a5e38;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">✅ 核准</button>' +
@@ -2343,8 +2358,7 @@ function showCalDay(ds) {
       return '<div class="leave-item '+r.status+'" style="margin-bottom:.5rem;border-left-color:'+color+'">' +
         '<div class="leave-header"><div class="leave-name">'+namePrefix+r.leave_type+' — '+r.leave_subtype+'</div><span class="leave-badge '+(badgeMap[r.status]||'')+'">'+(statusMap[r.status]||r.status)+'</span></div>' +
         '<div class="leave-meta">'+daysText(r)+'<br>代理人：'+(r.proxy_name?maskName(r.proxy_name):'—')+
-        // v155：可審核的假單顯示事由，主管審核時看得到
-        (canReview ? '<br>事由：'+(tpEsc(r.reason||'').replace(/\r?\n/g,'<br>')||'—') : '')+'</div>' +
+        (showReason ? '<br>事由：'+(tpEsc(r.reason||'').replace(/\r?\n/g,'<br>')||'—') : '')+'</div>' +
         reviewBtns + '</div>';
     }).join('');
   }
@@ -2937,9 +2951,16 @@ async function changeUnit(sel) {
   if (!confirm(msg)) { loadHrMgmt(); return; }
 
   // 只更新員工資料；歷史假單一律不動（金檢需與紙本一致）
-  await sb.from('employees').update({unit_id:newUnitId, unit_name:newUnitName, is_manager:false}).eq('emp_no', empNo);
+  var upd = {unit_id:newUnitId, unit_name:newUnitName, is_manager:false};
+  // v156：調到分社 → 清除直屬長官（否則原管理部長官的行事曆還會看到他）
+  var toBranch = !/^7(-|$)/.test(newUnitId);
+  if (toBranch && emp.supervisor_emp_no) upd.supervisor_emp_no = null;
+  await sb.from('employees').update(upd).eq('emp_no', empNo);
+  if (toBranch) emp.supervisor_emp_no = null;
 
   var doneMsg = '✅ '+emp.name+' 的單位已改為'+newUnitName+'\n（歷史假單維持在'+oldUnitName+'，未變動）';
+  if (upd.supervisor_emp_no === null) doneMsg += '\n• 已清除原直屬長官';
+  else if (!toBranch && /^7(-|$)/.test(oldUnitId||'') && oldUnitId !== newUnitId) doneMsg += '\n\n⚠️ 管理部內調動：請確認直屬長官是否需要更換';
   if (wasManager) {
     doneMsg += '\n\n⚠️ 主管旗標已清除，請現在到「'+newUnitName+'」勾選「主管」。';
     // 原單位是否還有主管？沒有就提醒
