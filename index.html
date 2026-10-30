@@ -1016,6 +1016,7 @@ async function notifyManager(emp, leaveInfo) {
     // 通知主管 + 副主管
     var res = await sb.from('employees').select('emp_no,line_user_id')
       .eq('unit_id', emp.unit_id)
+      .eq('is_active', true) // v158：離職主管不通知
       .or('is_manager.eq.true,is_sub_manager.eq.true');
     if (res.data) {
       for (var m of res.data) {
@@ -2240,7 +2241,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v157';
+  if (dbg) dbg.textContent = 'v158';
   renderCalendar();
 }
 
@@ -2302,6 +2303,17 @@ function showCalDay(ds) {
   var myLeaves = allUnitLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
   var myProxies = proxyLeaves.filter(function(r){ return r.start_date<=ds&&r.end_date>=ds; });
   if (!myLeaves.length && !myProxies.length) { detail.innerHTML='<div class="empty-hint">'+ds+' 無紀錄</div>'; return; }
+  // v158：行事曆資料（leave_calendar）沒有事由欄位 → 點日期時再到 leave_requests 補抓
+  var needReason = myLeaves.filter(function(r){ return r.reason === undefined && r.id; });
+  if (needReason.length) {
+    var ids = needReason.map(function(r){ return r.id; });
+    sb.from('leave_requests').select('id,reason').in('id', ids).then(function(res){
+      var map = {};
+      (res.data||[]).forEach(function(x){ map[x.id] = x.reason; });
+      needReason.forEach(function(r){ r.reason = (r.id in map) ? (map[r.id]||'') : ''; });
+      showCalDay(ds);
+    });
+  }
   if (myLeaves.length) {
     // 管理部一般員工看到直屬長官假單時也要顯示名字
     var isMgmtStaff = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !currentUser.is_manager && !currentUser.is_gm;
@@ -2927,8 +2939,21 @@ async function toggleActive(btn, active) {
   var empNo = btn.dataset.empno;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
   var msg = active ? '確定要啟用 '+emp.name+' 的帳號？' : '確定要停用 '+emp.name+' 的帳號？停用後無法登入，假單紀錄保留。';
+  // v158：停用時一併清除主管/副主管/人事/副總旗標；若仍是別人的直屬長官則提醒
+  var subs = active ? [] : allMgmtEmps.filter(function(e){ return e.supervisor_emp_no===empNo && e.is_active!==false; });
+  var roles = [];
+  if (!active) {
+    if (emp.is_manager) roles.push('主管');
+    if (emp.is_sub_manager) roles.push('副主管');
+    if (emp.is_hr) roles.push('人事');
+    if (emp.is_gm) roles.push('副總');
+    if (roles.length) msg += '\n\n• 會一併取消「'+roles.join('、')+'」權限';
+    if (subs.length) msg += '\n\n⚠️ '+emp.name+' 目前是以下同仁的直屬長官，停用後請到人員管理改掛新長官：\n'+subs.map(function(e){return e.name;}).join('、');
+  }
   if (!confirm(msg)) return;
-  await sb.from('employees').update({is_active:active}).eq('emp_no', empNo);
+  var upd = {is_active:active};
+  if (!active) { upd.is_manager=false; upd.is_sub_manager=false; upd.is_hr=false; upd.is_gm=false; }
+  await sb.from('employees').update(upd).eq('emp_no', empNo);
   CERT_LOADED = false; // 啟停用 → 證照統計下次重讀
   loadHrMgmt();
 }
@@ -2989,8 +3014,9 @@ async function toggleRole(btn) {
     : '確定取消 '+emp.name+' 的「'+roleName+'」權限？';
   if (!confirm(msg)) return;
   // 主管：先確認同單位是否已有主管
-  if (field === 'is_manager' && newVal) {
-    var existing = allMgmtEmps.find(function(e){ return e.unit_id===emp.unit_id&&e.is_manager&&e.emp_no!==empNo; });
+  // v158：管理部同單位可有多位主管，只有分社才自動取消原主管
+  if (field === 'is_manager' && newVal && !/^7(-|$)/.test(emp.unit_id||'')) {
+    var existing = allMgmtEmps.find(function(e){ return e.unit_id===emp.unit_id&&e.is_manager&&e.is_active!==false&&e.emp_no!==empNo; });
     if (existing && !confirm(existing.name+' 目前是此單位主管，確定改為 '+emp.name+'？')) return;
     if (existing) await sb.from('employees').update({is_manager:false}).eq('emp_no', existing.emp_no);
   }
