@@ -1647,8 +1647,18 @@ async function doSubmitLeave() {
   if (reviewerType === 'mgmt' && emp.supervisor_emp_no) {
     insertData.reviewer_emp_no = emp.supervisor_emp_no;
   }
+  // v159：管理部沒設直屬長官 → 不送出（否則假單沒人能審）
+  if (reviewerType === 'mgmt' && !emp.supervisor_emp_no) {
+    errEl.textContent='您的直屬長官尚未設定，假單無法送審，請聯絡人事（企劃）設定後再送出。';
+    errEl.style.display='block'; return;
+  }
   const { error } = await sb.from('leave_requests').insert(insertData);
-  if (error) { errEl.textContent='送出失敗：'+error.message; errEl.style.display='block'; return; }
+  if (error) {
+    errEl.textContent = error.code==='23505'
+      ? '同一天已有相同假別的假單（審核中或已核准），請勿重複送出；如需修改請先撤回原假單。'
+      : '送出失敗：'+error.message;
+    errEl.style.display='block'; return;
+  }
   // LINE 通知主管
   var _p = halfPeriodDetail(startDate, endDate, days, startTime, endTime);
   function _md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
@@ -2241,7 +2251,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v158';
+  if (dbg) dbg.textContent = 'v159';
   renderCalendar();
 }
 
@@ -2975,8 +2985,29 @@ async function changeUnit(sel) {
   }
   if (!confirm(msg)) { loadHrMgmt(); return; }
 
+  // v159：調進管理部（或管理部內調動）→ 一定要選直屬長官
+  var toMgmt = /^7(-|$)/.test(newUnitId);
+  var newSup = undefined;
+  if (toMgmt) {
+    if (newUnitId === '7') { alert('「7」是理事主席專用代號，請改選管理部 7-01～7-12 其中一個單位。'); loadHrMgmt(); return; }
+    var cands = allMgmtEmps.filter(function(e){
+      return e.is_active!==false && e.emp_no!==empNo && /^7(-|$)/.test(e.unit_id||'') &&
+             (e.is_manager || e.is_sub_manager || e.is_gm || e.emp_no===GM_EMP_NO || e.emp_no===CHAIRMAN_EMP_NO);
+    });
+    var curIdx = -1;
+    var list = cands.map(function(e,i){ if (e.emp_no===emp.supervisor_emp_no) curIdx=i; return (i+1)+'. '+e.name+'（'+e.unit_id+' '+(e.title||'')+'）'; }).join('\n');
+    while (true) {
+      var ans = prompt('請選 '+emp.name+' 的直屬長官（輸入編號）：\n\n'+list, curIdx>=0 ? String(curIdx+1) : '');
+      if (ans === null) { alert('未選直屬長官，已取消調動。'); loadHrMgmt(); return; }
+      var k = parseInt(ans,10);
+      if (k>=1 && k<=cands.length) { newSup = cands[k-1]; break; }
+      alert('請輸入 1～'+cands.length+' 的編號');
+    }
+  }
+
   // 只更新員工資料；歷史假單一律不動（金檢需與紙本一致）
   var upd = {unit_id:newUnitId, unit_name:newUnitName, is_manager:false};
+  if (newSup) { upd.supervisor_emp_no = newSup.emp_no; emp.supervisor_emp_no = newSup.emp_no; }
   // v156：調到分社 → 清除直屬長官（否則原管理部長官的行事曆還會看到他）
   var toBranch = !/^7(-|$)/.test(newUnitId);
   if (toBranch && emp.supervisor_emp_no) upd.supervisor_emp_no = null;
@@ -2985,7 +3016,7 @@ async function changeUnit(sel) {
 
   var doneMsg = '✅ '+emp.name+' 的單位已改為'+newUnitName+'\n（歷史假單維持在'+oldUnitName+'，未變動）';
   if (upd.supervisor_emp_no === null) doneMsg += '\n• 已清除原直屬長官';
-  else if (!toBranch && /^7(-|$)/.test(oldUnitId||'') && oldUnitId !== newUnitId) doneMsg += '\n\n⚠️ 管理部內調動：請確認直屬長官是否需要更換';
+  if (newSup) doneMsg += '\n• 直屬長官：'+newSup.name;
   if (wasManager) {
     doneMsg += '\n\n⚠️ 主管旗標已清除，請現在到「'+newUnitName+'」勾選「主管」。';
     // 原單位是否還有主管？沒有就提醒
