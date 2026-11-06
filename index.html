@@ -2251,7 +2251,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v159';
+  if (dbg) dbg.textContent = 'v160';
   renderCalendar();
 }
 
@@ -2885,6 +2885,12 @@ function empMgmtItemHtml(e) {
       '<select data-empno="'+e.emp_no+'" onchange="changeUnit(this)" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fafafa;-webkit-appearance:none;">'+unitOpts+'</select>' +
       toggleActiveBtn +
     '</div>' +
+    (/^7-/.test(e.unit_id||'') && e.emp_no!==CHAIRMAN_EMP_NO ? (function(){
+      var sp = allMgmtEmps.find(function(x){ return x.emp_no===e.supervisor_emp_no; });
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.4rem;font-size:12px;">' +
+        '<span style="color:'+(sp?'var(--muted)':'#c0392b')+';">直屬長官：'+(sp?maskName(sp.name):'⚠️ 未設定')+'</span>' +
+        '<button data-empno="'+e.emp_no+'" onclick="changeSupervisor(this)" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:#eaf4ff;color:#2f5f9e;cursor:pointer;font-size:11px;font-family:inherit;white-space:nowrap;">改長官</button></div>';
+    })() : '') +
     '<div style="display:flex;gap:.4rem;flex-wrap:wrap;">' +
       roleBtn('is_manager', '主管', '#fff3cd', '#856404', 'var(--muted)') +
       roleBtn('is_sub_manager', '副主管', '#fde8d8', '#9c4a00', 'var(--muted)') +
@@ -2968,6 +2974,46 @@ async function toggleActive(btn, active) {
   loadHrMgmt();
 }
 
+// v160：從管理部主管/副總/總經理/主席中選直屬長官（輸入編號），取消回傳 null
+function pickSupervisor(emp) {
+  var cands = allMgmtEmps.filter(function(e){
+    return e.is_active!==false && e.emp_no!==emp.emp_no && /^7(-|$)/.test(e.unit_id||'') &&
+           (e.is_manager || e.is_sub_manager || e.is_gm || e.emp_no===GM_EMP_NO || e.emp_no===CHAIRMAN_EMP_NO);
+  });
+  var curIdx = -1;
+  var list = cands.map(function(e,i){ if (e.emp_no===emp.supervisor_emp_no) curIdx=i; return (i+1)+'. '+e.name+'（'+(e.title||'')+'）'; }).join('\n');
+  while (true) {
+    var ans = prompt('請選 '+emp.name+' 的直屬長官（輸入編號）：\n\n'+list, curIdx>=0 ? String(curIdx+1) : '');
+    if (ans === null) return null;
+    var k = parseInt(ans,10);
+    if (k>=1 && k<=cands.length) return cands[k-1];
+    alert('請輸入 1～'+cands.length+' 的編號');
+  }
+}
+// v160：管理部單位代號＝該長官部屬最常用的代號；長官還沒有部屬就用長官自己的代號
+function mgmtUnitForSupervisor(sup, exceptEmpNo) {
+  var cnt = {};
+  allMgmtEmps.forEach(function(e){
+    if (e.supervisor_emp_no===sup.emp_no && e.is_active!==false && e.emp_no!==exceptEmpNo && /^7-/.test(e.unit_id||'')) cnt[e.unit_id]=(cnt[e.unit_id]||0)+1;
+  });
+  var best = null; Object.keys(cnt).forEach(function(u){ if (!best || cnt[u]>cnt[best]) best=u; });
+  return best || (/^7-/.test(sup.unit_id||'') ? sup.unit_id : '7-01');
+}
+// v160：管理部同仁單獨更換直屬長官（不換單位）
+async function changeSupervisor(btn) {
+  var empNo = btn.dataset.empno;
+  var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
+  var sup = pickSupervisor(emp);
+  if (!sup) return;
+  if (sup.emp_no === emp.supervisor_emp_no) { alert('直屬長官沒有變更。'); return; }
+  var newUnit = mgmtUnitForSupervisor(sup, empNo);
+  if (!confirm('確定將 '+emp.name+' 的直屬長官改為「'+sup.name+'」？\n\n• 之後送出的假單由 '+sup.name+' 審核\n• 已送出、審核中的假單仍由原長官審核')) return;
+  var r = await sb.from('employees').update({supervisor_emp_no:sup.emp_no, unit_id:newUnit}).eq('emp_no', empNo);
+  if (r && r.error) { alert('更新失敗：'+r.error.message); return; }
+  alert('✅ '+emp.name+' 的直屬長官已改為 '+sup.name);
+  loadHrMgmt();
+}
+
 async function changeUnit(sel) {
   var empNo = sel.dataset.empno;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
@@ -2985,24 +3031,13 @@ async function changeUnit(sel) {
   }
   if (!confirm(msg)) { loadHrMgmt(); return; }
 
-  // v159：調進管理部（或管理部內調動）→ 一定要選直屬長官
+  // v160：調進管理部 → 一定要選直屬長官，單位代號依長官自動帶入（不會再落在主席專用的「7」）
   var toMgmt = /^7(-|$)/.test(newUnitId);
   var newSup = undefined;
   if (toMgmt) {
-    if (newUnitId === '7') { alert('「7」是理事主席專用代號，請改選管理部 7-01～7-12 其中一個單位。'); loadHrMgmt(); return; }
-    var cands = allMgmtEmps.filter(function(e){
-      return e.is_active!==false && e.emp_no!==empNo && /^7(-|$)/.test(e.unit_id||'') &&
-             (e.is_manager || e.is_sub_manager || e.is_gm || e.emp_no===GM_EMP_NO || e.emp_no===CHAIRMAN_EMP_NO);
-    });
-    var curIdx = -1;
-    var list = cands.map(function(e,i){ if (e.emp_no===emp.supervisor_emp_no) curIdx=i; return (i+1)+'. '+e.name+'（'+e.unit_id+' '+(e.title||'')+'）'; }).join('\n');
-    while (true) {
-      var ans = prompt('請選 '+emp.name+' 的直屬長官（輸入編號）：\n\n'+list, curIdx>=0 ? String(curIdx+1) : '');
-      if (ans === null) { alert('未選直屬長官，已取消調動。'); loadHrMgmt(); return; }
-      var k = parseInt(ans,10);
-      if (k>=1 && k<=cands.length) { newSup = cands[k-1]; break; }
-      alert('請輸入 1～'+cands.length+' 的編號');
-    }
+    newSup = pickSupervisor(emp);
+    if (!newSup) { alert('未選直屬長官，已取消調動。'); loadHrMgmt(); return; }
+    if (newUnitId === '7') newUnitId = mgmtUnitForSupervisor(newSup, empNo);
   }
 
   // 只更新員工資料；歷史假單一律不動（金檢需與紙本一致）
