@@ -1874,23 +1874,21 @@ async function approveAllLeaves(src) {
   if (!pending.length) return;
   if (!confirm('確定要一鍵核准所有 ' + pending.length + ' 筆待審假單？')) return;
   var isUnitSrc = src !== 'gm' && src !== 'chairman' && src !== 'hr';
+  if (_approving.all) return;
+  _approving.all = true;
+  try {
   for (const r of pending) {
     var needsGM = (r.days||0) >= 3 && isUnitSrc;
     if (needsGM) {
-      await sb.from('leave_requests').update({
-        status: 'pending', reviewer_type: 'gm',
-        mgr_approved_by: currentUser.name, reviewed_by: null, reviewed_at: null
-      }).eq('id', r.id);
-      var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
-      await notifyGM(gmMsg);
+      if (await forwardToGmAtomic(r.id)) {
+        var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
+        await notifyGM(gmMsg);
+      }
     } else {
-      var docNo = r.doc_no || await getNextDocNo(r.start_date);
-      await sb.from('leave_requests').update({
-        status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
-      }).eq('id', r.id);
-      await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅');
+      if (await approveLeaveAtomic(r.id)) await notifyEmployee(r.emp_no, '[請假結果] 您的假單已核准 ✅');
     }
   }
+  } finally { _approving.all = false; }
   if (src==='gm') loadGmReview();
   else if (src==='chairman') loadChairmanReview();
   else loadMgrReview();
@@ -2098,6 +2096,23 @@ async function getNextDocNo(startDate) {
   return res.data;
 }
 
+// v161：核准一律走資料庫 approve_leave()：確認仍待審＋給文號一次完成，
+// 重複按或兩台同時按，第二次會回傳 null（不再浪費文號、不重複通知）
+var _approving = {};
+async function approveLeaveAtomic(id) {
+  var res = await sb.rpc('approve_leave', { p_id: id });
+  if (res.error) { alert('核准失敗：' + res.error.message + '\n請重新整理後再試。'); return null; }
+  return res.data || null;   // null = 這張已被處理過
+}
+// v161：轉呈總經理也只在仍待審時才轉（避免重複通知）
+async function forwardToGmAtomic(id) {
+  var res = await sb.from('leave_requests').update({
+    status: 'pending', reviewer_type: 'gm', mgr_approved_by: currentUser.name, reviewed_by: null, reviewed_at: null
+  }).eq('id', id).eq('status', 'pending').neq('reviewer_type', 'gm').select('id');
+  if (res.error) { alert('轉呈失敗：' + res.error.message); return false; }
+  return !!(res.data && res.data.length);
+}
+
 // 單號排序金鑰：115-0001 → 1150001；舊的純數字排在前面
 function docNoKey(v) {
   var t = String(v == null ? '' : v);
@@ -2112,35 +2127,34 @@ async function approveLeave() {
   const pool = currentReviewSource==='gm' ? allGmLeaves : currentReviewSource==='hr' ? allHrLeaves : allUnitLeaves;
   const r = pool.find(x=>x.id===currentLeaveId);
   if (!r) return;
+  if (_approving[r.id]) return;
+  _approving[r.id] = true;
   closeModal();
   var isUnitApprove = currentReviewSource !== 'gm' && currentReviewSource !== 'chairman' && currentReviewSource !== 'hr';
   var needsGM = (r.days||0) >= 3 && isUnitApprove;
-
+  var done = false;
+  try {
   if (needsGM) {
     // ≥3天且分社/管理部主管核准：轉交總經理審核
-    await sb.from('leave_requests').update({
-      status: 'pending',
-      reviewer_type: 'gm',
-      mgr_approved_by: currentUser.name,
-      reviewed_by: null,
-      reviewed_at: null
-    }).eq('id', r.id);
-    var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
-    await notifyGM(gmMsg);
+    done = await forwardToGmAtomic(r.id);
+    if (done) {
+      var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
+      await notifyGM(gmMsg);
+    }
   } else {
     // <3天 或 總經理/理事主席核准：直接核准並通知員工
-    var docNo = r.doc_no || await getNextDocNo(r.start_date);
-    await sb.from('leave_requests').update({
-      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
-    }).eq('id', r.id);
-    var empMsg = '[請假結果] 您的假單已核准 ✅';
-    await notifyEmployee(r.emp_no, empMsg);
+    done = !!(await approveLeaveAtomic(r.id));
+    if (done) {
+      var empMsg = '[請假結果] 您的假單已核准 ✅';
+      await notifyEmployee(r.emp_no, empMsg);
+    }
   }
+  } finally { delete _approving[r.id]; }
   if (currentReviewSource==='gm') loadGmReview();
   else if (currentReviewSource==='hr') loadHrAll();
   else if (currentReviewSource==='chairman') loadChairmanReview();
   else loadMgrReview();
-  alert('✅ 已核准假單');
+  alert(done ? '✅ 已核准假單' : 'ℹ️ 這張假單已經處理過了（可能剛剛已按過或其他長官已審），畫面已更新。');
 }
 
 async function rejectLeave() {
@@ -2251,7 +2265,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v160';
+  if (dbg) dbg.textContent = 'v161';
   renderCalendar();
 }
 
@@ -2407,22 +2421,21 @@ async function calApprove(id) {
   var isGmOrChairman = currentUser.is_gm || currentUser.emp_no === CHAIRMAN_EMP_NO;
   var needsGM = (r.days||0) >= 3 && isUnitApprove && !isGmOrChairman;
 
+  if (_approving[id]) return;
+  _approving[id] = true;
+  try {
   if (needsGM) {
-    await sb.from('leave_requests').update({
-      status: 'pending', reviewer_type: 'gm',
-      mgr_approved_by: currentUser.name,
-      reviewed_by: null, reviewed_at: null
-    }).eq('id', id);
-    var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
-    await notifyGM(gmMsg);
+    if (await forwardToGmAtomic(id)) {
+      var gmMsg = '[請假待審] 📣有一筆假單已由主管核准，待您審核，請開啟系統查看。';
+      await notifyGM(gmMsg);
+    }
   } else {
-    var docNo = r.doc_no || await getNextDocNo(r.start_date);
-    await sb.from('leave_requests').update({
-      status:'approved', reviewed_by:currentUser.name, reviewed_at:new Date().toISOString(), doc_no: docNo
-    }).eq('id', id);
-    var empMsg = '[請假結果] 您的假單已核准 ✅';
-    await notifyEmployee(r.emp_no, empMsg);
+    if (await approveLeaveAtomic(id)) {
+      var empMsg = '[請假結果] 您的假單已核准 ✅';
+      await notifyEmployee(r.emp_no, empMsg);
+    }
   }
+  } finally { delete _approving[id]; }
   await loadCalendar();
 }
 
