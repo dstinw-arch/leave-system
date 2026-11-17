@@ -149,6 +149,13 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .changepw-card p { font-size:12px; color:var(--muted); margin-bottom:1.25rem; }
 .empty-hint { text-align:center; color:var(--muted); font-size:13px; padding:2rem 0; }
 
+/* ═══════════ 假別額度管理 v162 ═══════════ */
+.qtab{flex:1;padding:8px 6px;border:1.5px solid var(--border);background:#fff;border-radius:7px;font-size:13px;font-family:inherit;cursor:pointer;}
+.qtab.on{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600;}
+.qsel{padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;}
+.qbtn{padding:8px 12px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.qcard{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:12px 14px;margin-bottom:.6rem;font-size:14px;line-height:1.7;}
+.qbadge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:4px;}
 /* ═══════════ 證照模組樣式 v120 ═══════════ */
 .topbar-row{display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;margin-bottom:14px}.modtabs{display:flex;gap:20px;flex-shrink:0}.modtabs button{position:relative;display:inline-flex;align-items:center;gap:5px;
   border:none;background:none;padding:0 0 7px;cursor:pointer;
@@ -398,10 +405,19 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div class="form-row">
           <label>假別細項</label>
-          <select id="apply-subtype"></select>
+          <select id="apply-subtype" onchange="refreshQuotaUI()"></select>
         </div>
+        <div class="form-row" id="apply-onbehalf-row" style="display:none;">
+          <label>代為登錄（人事專用）</label>
+          <select id="apply-onbehalf" onchange="onBehalfChanged()"><option value="">本人</option></select>
+        </div>
+        <div class="form-row" id="apply-event-row" style="display:none;">
+          <label>事件紀錄</label>
+          <select id="apply-event" onchange="refreshQuotaUI(true)"></select>
+        </div>
+        <div id="apply-quota-info" style="display:none;margin:-4px 0 12px;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.7;"></div>
         <div class="form-2col">
-          <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" onchange="syncEndDate()" /></div>
+          <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" onchange="syncEndDate();refreshQuotaUI()" /></div>
           <div class="form-row"><label>結束日期</label><input type="date" id="apply-end-date" onchange="calcDays()" /></div>
         </div>
         <div class="form-2col">
@@ -437,6 +453,10 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <input type="text" id="apply-proxy-name" placeholder="代理人姓名（必填）" autocomplete="off" oninput="searchProxy(this.value)" />
           <div id="proxy-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);display:none;max-height:180px;overflow-y:auto;margin-top:2px;"></div>
           <div id="proxy-info" style="font-size:12px;color:var(--muted);margin-top:4px;display:none;"></div>
+        </div>
+        <div class="form-row" id="apply-override-row" style="display:none;padding:8px 12px;background:#fdf0f1;border:1px solid #EE7785;border-radius:8px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="apply-override" style="width:auto;" onchange="document.getElementById('apply-override-reason').style.display=this.checked?'block':'none'"> 略過天數上限（人事專用）</label>
+          <input type="text" id="apply-override-reason" placeholder="略過原因（必填，例：住院、經總經理同意）" style="display:none;margin-top:6px;" />
         </div>
         <div id="apply-error" class="error-msg"></div>
         <br>
@@ -565,6 +585,60 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
       </div>
       <div id="annual-list" style="padding:0 1rem 80px;">載入中...</div>
+    </div>
+
+    <!-- 人事：額度管理（v162） -->
+    <div id="hr-quota" class="page" style="display:none;overflow-y:auto;height:calc(100vh - 56px);">
+      <div style="padding:1rem 1rem 0;position:sticky;top:0;background:var(--bg);z-index:10;padding-bottom:8px;">
+        <div class="page-title" style="margin-bottom:.6rem;">假別額度管理</div>
+        <div style="display:flex;gap:6px;margin-bottom:.6rem;">
+          <button class="qtab" id="qtab-ov" onclick="quotaTab('ov')">額度總覽</button>
+          <button class="qtab" id="qtab-ev" onclick="quotaTab('ev')">事件紀錄</button>
+          <button class="qtab" id="qtab-set" onclick="quotaTab('set')">設定</button>
+        </div>
+        <div id="qbar-ov" style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="qov-year" onchange="loadQuotaOverview()" class="qsel" style="width:90px;"></select>
+          <select id="qov-unit" onchange="renderQuotaOverview()" class="qsel" style="flex:1;min-width:110px;"><option value="">所有單位</option></select>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap;"><input type="checkbox" id="qov-near" onchange="renderQuotaOverview()" style="width:auto;">只看達 8 成</label>
+          <button onclick="downloadQuotaOverview()" class="qbtn">⬇ 下載</button>
+        </div>
+        <div id="qbar-ev" style="display:none;gap:6px;flex-wrap:wrap;">
+          <select id="qev-filter" onchange="renderQuotaEvents()" class="qsel" style="flex:1;">
+            <option value="open">未結案</option><option value="all">全部</option>
+          </select>
+          <button onclick="openEventForm()" class="qbtn" style="background:#379392;">＋ 新增事件</button>
+          <button onclick="downloadQuotaEvents()" class="qbtn">⬇ 下載</button>
+        </div>
+      </div>
+      <div id="qpane-ov" style="padding:0 1rem 80px;">載入中...</div>
+      <div id="qpane-ev" style="padding:0 1rem 80px;display:none;"></div>
+      <div id="qpane-set" style="padding:0 1rem 80px;display:none;"></div>
+    </div>
+
+    <!-- 事件紀錄表單 Modal -->
+    <div id="event-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:14px;padding:22px 20px;max-width:380px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+        <div id="ev-title" style="font-size:16px;font-weight:700;margin-bottom:12px;">新增事件紀錄</div>
+        <div class="form-row"><label>同仁</label><select id="ev-emp"></select></div>
+        <div class="form-row"><label>事件種類</label>
+          <select id="ev-kind" onchange="evFormChanged(true)">
+            <option value="孕產">孕產（本人懷孕／生產／流產）</option>
+            <option value="配偶孕產">配偶孕產（陪產檢及陪產假）</option>
+            <option value="結婚">結婚</option>
+            <option value="喪">喪</option>
+          </select>
+        </div>
+        <div class="form-row"><label id="ev-date-label">預產期／分娩日</label><input type="date" id="ev-date" onchange="evFormChanged(true)"></div>
+        <div class="form-row" id="ev-rel-row" style="display:none;"><label>亡故親屬</label><select id="ev-rel" onchange="evFormChanged(true)"></select></div>
+        <div class="form-row"><label id="ev-detail-label">細節（選填）</label><input type="text" id="ev-detail" placeholder="例：流產（妊娠 3 個月以上）"></div>
+        <div class="form-row"><label>可請天數（依日期自動帶入，可修改）</label><div id="ev-quotas"></div></div>
+        <div class="form-row"><label>備註（選填）</label><input type="text" id="ev-note"></div>
+        <div id="ev-error" class="error-msg"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button onclick="closeEventForm()" style="flex:1;padding:10px;border:1.5px solid var(--border);background:#fff;border-radius:8px;font-size:14px;cursor:pointer;">取消</button>
+          <button onclick="saveEvent()" style="flex:1;padding:10px;border:none;background:var(--primary);color:#fff;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">儲存</button>
+        </div>
+      </div>
     </div>
 
     <!-- 人事：人員管理 -->
@@ -901,6 +975,7 @@ async function doLogout() {
 
 function initApp() {
   buildNav();
+  initQuotaApply();
   updateSubtype();
   loadEmpHome();
   const today = new Date().toISOString().split('T')[0];
@@ -931,7 +1006,8 @@ function buildNav() {
     btns += `
     <button class="bnav" id="bnav-hr-all" onclick="showPage('hr-all',this);loadHrAll()"><span class="bnav-icon">👥</span>全員假單</button>
     <button class="bnav" id="bnav-hr-mgmt" onclick="showPage('hr-mgmt',this);loadHrMgmt()"><span class="bnav-icon">🔧</span>人員管理</button>
-    <button class="bnav" id="bnav-hr-annual" onclick="showPage('hr-annual',this);loadAnnualOverview()"><span class="bnav-icon">📊</span>年假總覽</button>`;
+    <button class="bnav" id="bnav-hr-annual" onclick="showPage('hr-annual',this);loadAnnualOverview()"><span class="bnav-icon">📊</span>年假總覽</button>
+    <button class="bnav" id="bnav-hr-quota" onclick="showPage('hr-quota',this);quotaTab('ov')"><span class="bnav-icon">🧮</span>額度管理</button>`;
   }
   btns += `
     <button class="bnav" id="bnav-page-settings" onclick="showPage('page-settings',this)"><span class="bnav-icon">⚙️</span>設定</button>`;
@@ -1475,6 +1551,7 @@ function updateSubtype() {
   const type = document.getElementById('apply-type').value;
   const sub = document.getElementById('apply-subtype');
   sub.innerHTML = LEAVE_TYPES[type].map(s=>`<option value="${s}">${s}</option>`).join('');
+  refreshQuotaUI();
 }
 
 // ── 代理人可用性檢查：代理人在申請期間若也請假（核准或審核中）→ 擋下改選 ──
@@ -1529,10 +1606,47 @@ async function confirmLeave() {
   if (type === '休假' && startDate.slice(0,4) !== endDate.slice(0,4)) {
     errEl.textContent='特休以年度計算，跨年請分兩張申請（12/31 前一張、1/1 後一張）'; errEl.style.display='block'; return;
   }
+  // v162：假別天數上限檢查
+  var _applyEmpNo = applyEmpNo();
+  var _ovr = isQuotaOverride();
+  if (_ovr && !document.getElementById('apply-override-reason').value.trim()) {
+    errEl.textContent='勾選略過天數上限時，請填寫略過原因'; errEl.style.display='block'; return;
+  }
+  var _eventId = currentEventId(subtype, startDate);
+  var _qs = await computeQuotaStatus(_applyEmpNo, subtype, startDate, _eventId);
+  var quotaNote = '';
+  for (var _i = 0; _i < _qs.length; _i++) {
+    var _s = _qs[_i];
+    if (_s.needEvent) {
+      if (QUOTA_ENFORCE && !_ovr) {
+        errEl.textContent='請「'+subtype+'」需先選擇事件紀錄。若下拉選單沒有可選的事件，請洽人事建立。'; errEl.style.display='block'; return;
+      }
+      continue;
+    }
+    var _remain = _s.cap - _s.used;
+    if (days > _remain) {
+      if (_s.hard && QUOTA_ENFORCE && !_ovr) {
+        errEl.textContent = _s.label + '剩餘 ' + fmtD(Math.max(_remain,0)) + ' 天，不足本次 ' + fmtD(days) + ' 天。超過的部分請改請特休或事假。';
+        errEl.style.display='block'; return;
+      }
+      if (!_s.hard) {
+        quotaNote += '<div style="margin-top:10px;padding:8px 10px;background:#fff6e6;border:1px solid #f0c36d;border-radius:6px;font-size:12px;color:#8a5a00;line-height:1.6;">' +
+          '⚠️ ' + _s.label + '連同本次共 <b>' + fmtD(_s.used + days) + '</b> 天，超過 ' + fmtD(_s.cap) + ' 天（未住院上限）。仍可送出，人事會再確認。</div>';
+      }
+    }
+  }
+  if (_ovr) {
+    quotaNote += '<div style="margin-top:10px;padding:8px 10px;background:#fdf0f1;border:1px solid #EE7785;border-radius:6px;font-size:12px;color:#a33;line-height:1.6;">🔓 人事略過天數上限：' +
+      escQ(document.getElementById('apply-override-reason').value.trim()) + '</div>';
+  }
+  if (_applyEmpNo !== currentUser.emp_no) {
+    var _bo = document.getElementById('apply-onbehalf');
+    quotaNote = '<div style="margin-top:10px;font-size:13px;color:#379392;"><b>代為登錄：</b>' + escQ(_bo.options[_bo.selectedIndex].text) + '</div>' + quotaNote;
+  }
   // 代理人驗證：姓名必須對到「在職」同事，否則擋下不讓送出（已點選建議則 proxyData.emp_no 已有值，不重查）
   if (!proxyData.emp_no) {
     const _pr = await sb.from('employees').select('emp_no,unit_name,title')
-      .eq('name', proxyName).eq('is_active', true).neq('emp_no', currentUser.emp_no).limit(2);
+      .eq('name', proxyName).eq('is_active', true).neq('emp_no', _applyEmpNo).limit(2);
     if (!_pr.data || _pr.data.length === 0) {
       errEl.textContent='查無代理人「'+proxyName+'」，請確認姓名是否正確，或從下方建議清單點選';
       errEl.style.display='block'; return;
@@ -1556,7 +1670,7 @@ async function confirmLeave() {
       var _y = new Date().getFullYear();
       var _mr = await sb.from('leave_requests')
         .select('days,status,start_date')
-        .eq('emp_no', currentUser.emp_no)
+        .eq('emp_no', _applyEmpNo)
         .eq('leave_type', '病假').eq('leave_subtype', '生理假')
         .in('status', ['approved','pending'])
         .gte('start_date', _y + '-01-01').lte('start_date', _y + '-12-31');
@@ -1581,13 +1695,15 @@ async function confirmLeave() {
     '<b>時間：</b>' + timeLabel + '<br>' +
     '<b>天數：</b>' + days + ' 天<br>' +
     '<b>事由：</b>' + reason + '<br>' +
-    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' + menstrualNote;
+    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' + menstrualNote + quotaNote;
   document.getElementById('confirm-modal').style.display = 'flex';
 }
 
 async function doSubmitLeave() {
   document.getElementById('confirm-modal').style.display = 'none';
-  const emp = currentUser;
+  const emp = await getApplyEmp();
+  if (!emp) { alert('讀取代為登錄同仁資料失敗，請重試'); return; }
+  const _isOnBehalf = emp.emp_no !== currentUser.emp_no;
   const type = document.getElementById('apply-type').value;
   const subtype = document.getElementById('apply-subtype').value;
   const startDate = document.getElementById('apply-start-date').value;
@@ -1641,7 +1757,10 @@ async function doSubmitLeave() {
     proxy_emp_no:resolvedProxyEmpNo,
     proxy_unit:resolvedProxyUnit,
     proxy_title:resolvedProxyTitle,
-    status:'pending', reviewer_type:reviewerType
+    status:'pending', reviewer_type:reviewerType,
+    event_id: currentEventId(subtype, startDate),
+    quota_override_by: isQuotaOverride() ? currentUser.emp_no : null,
+    quota_override_reason: isQuotaOverride() ? document.getElementById('apply-override-reason').value.trim() : null
   };
   // 管理部假單：附上直屬長官員工編號
   if (reviewerType === 'mgmt' && emp.supervisor_emp_no) {
@@ -1667,8 +1786,9 @@ async function doSubmitLeave() {
     '　天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '');
   await notifyManager(emp, leaveMsg);
   await notifyProxy(insertData);
-  alert('✅ 假單已送出，等待審核');
-  ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty'].forEach(id=>document.getElementById(id).value='');
+  alert(_isOnBehalf ? '✅ 已代 ' + emp.name + ' 登錄假單，等待審核' : '✅ 假單已送出，等待審核');
+  ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty','apply-override-reason'].forEach(id=>document.getElementById(id).value='');
+  resetQuotaApply();
   proxyData = {};
   var pi = document.getElementById('proxy-info'); if(pi) { pi.textContent=''; pi.style.display='none'; }
   showPage('emp-home', document.getElementById('bnav-emp-home'));
@@ -2265,7 +2385,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v161';
+  if (dbg) dbg.textContent = 'v162';
   renderCalendar();
 }
 
@@ -3364,6 +3484,557 @@ async function commitAnnualLeave() {
   ANNUAL_PENDING = null;
   document.getElementById('annual-preview').style.display = 'none';
   loadHrMgmt();
+}
+
+
+// ═══════════ v162：假別天數上限 ═══════════
+// 規則來源：leave_rules（新舊制以生效日切換）；事件：leave_events（人事建立）
+// 開關：app_settings.leave_quota_enforce（on 才硬擋；off 只顯示資訊）
+var LEAVE_RULES = null;
+var QUOTA_ENFORCE = false;
+var QUOTA_EVENT_KIND_SUBS = { '孕產':['產假','產檢假'], '配偶孕產':['陪產檢及陪產假'], '結婚':['婚假'], '喪':['喪假'] };
+var FUNERAL_DAYS = [
+  ['父母',8],['養父母',8],['繼父母',8],['配偶',8],
+  ['祖父母',6],['子女',6],['配偶之父母',6],['配偶之養父母',6],['配偶之繼父母',6],
+  ['曾祖父母',3],['兄弟姊妹',3],['配偶之祖父母',3]
+];
+var _applyEmpCache = {};
+var _quotaUiToken = 0;
+
+function fmtD(n){ n = Number(n)||0; return (Math.round(n*10)/10).toString(); }
+function todayYMD(){ return fmtDateYMD(new Date()); }
+function escQ(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+async function loadLeaveRules(force) {
+  if (LEAVE_RULES && !force) return;
+  var r = await sb.from('leave_rules').select('*').order('id');
+  LEAVE_RULES = r.data || [];
+  var s = await sb.from('app_settings').select('value').eq('key','leave_quota_enforce').maybeSingle();
+  QUOTA_ENFORCE = !!(s.data && s.data.value === 'on');
+}
+function rulesFor(subtype, dateStr) {
+  return (LEAVE_RULES||[]).filter(function(r){
+    return r.leave_subtype === subtype && dateStr >= r.effective_from && dateStr <= r.effective_to;
+  });
+}
+function groupSubtypes(group) {
+  var subs = [];
+  (LEAVE_RULES||[]).forEach(function(r){ if (r.count_group === group && subs.indexOf(r.leave_subtype) < 0) subs.push(r.leave_subtype); });
+  return subs;
+}
+
+// 計算某人某假別的額度狀態 → [{label, cap, used, hard, needEvent}]
+async function computeQuotaStatus(empNo, subtype, startDate, eventId) {
+  await loadLeaveRules();
+  if (!empNo || !subtype || !startDate) return [];
+  var rules = rulesFor(subtype, startDate);
+  if (!rules.length) return [];
+  var y = startDate.slice(0,4);
+  var yearRows = null;
+  async function getYearRows() {
+    if (yearRows) return yearRows;
+    var r = await sb.from('leave_requests').select('days,leave_type,leave_subtype')
+      .eq('emp_no', empNo).in('status',['approved','pending'])
+      .gte('start_date', y+'-01-01').lte('start_date', y+'-12-31').limit(5000);
+    yearRows = r.data || [];
+    return yearRows;
+  }
+  var out = [];
+  for (var i = 0; i < rules.length; i++) {
+    var r = rules[i];
+    if (r.scope === 'annual') {
+      var q = await sb.from('annual_leave_quota').select('days').eq('emp_no', empNo).eq('year', parseInt(y,10)).maybeSingle();
+      var cap = (q.data && q.data.days != null) ? parseFloat(q.data.days) : null;
+      if (cap === null) {
+        var e = await sb.from('employees').select('annual_leave_days').eq('emp_no', empNo).maybeSingle();
+        cap = (e.data && e.data.annual_leave_days) ? parseFloat(e.data.annual_leave_days) : 0;
+      }
+      var rows = await getYearRows();
+      var used = rows.filter(function(x){ return x.leave_type === '休假' && x.leave_subtype === '特別休假'; })
+        .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+      out.push({ label: y + ' 年特休', cap: cap, used: used, hard: r.hard_block });
+    } else if (r.scope === 'year') {
+      var subs = r.count_group ? groupSubtypes(r.count_group) : [r.leave_subtype];
+      var rows2 = await getYearRows();
+      var used2 = rows2.filter(function(x){ return subs.indexOf(x.leave_subtype) >= 0; })
+        .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+      var lbl = r.count_group ? (r.count_group.replace('組','') + '（含' + subs.join('、') + '）') : r.leave_subtype;
+      out.push({ label: y + ' 年' + lbl, cap: Number(r.quota_days), used: used2, hard: r.hard_block });
+    } else if (r.scope === 'event') {
+      if (!eventId) { out.push({ label: subtype, needEvent: true, hard: r.hard_block }); continue; }
+      var ev = await sb.from('leave_events').select('*').eq('id', eventId).maybeSingle();
+      if (!ev.data) { out.push({ label: subtype, needEvent: true, hard: r.hard_block }); continue; }
+      var cap3 = ev.data.quotas ? Number(ev.data.quotas[subtype]) : NaN;
+      if (isNaN(cap3)) { out.push({ label: subtype, needEvent: true, hard: r.hard_block }); continue; }
+      var ur = await sb.from('leave_requests').select('days').eq('event_id', eventId)
+        .eq('leave_subtype', subtype).in('status',['approved','pending']);
+      var used3 = (ur.data||[]).reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+      out.push({ label: subtype + '（本事件）', cap: cap3, used: used3, hard: r.hard_block });
+    }
+  }
+  return out;
+}
+
+// ── 申請表單 ──
+function applyEmpNo() {
+  var sel = document.getElementById('apply-onbehalf');
+  if (currentUser && currentUser.is_hr && sel && sel.value) return sel.value;
+  return currentUser ? currentUser.emp_no : null;
+}
+function isQuotaOverride() {
+  var cb = document.getElementById('apply-override');
+  return !!(currentUser && currentUser.is_hr && cb && cb.checked);
+}
+async function getApplyEmp() {
+  var no = applyEmpNo();
+  if (no === currentUser.emp_no) return currentUser;
+  if (_applyEmpCache[no]) return _applyEmpCache[no];
+  var r = await sb.from('employees').select('*').eq('emp_no', no).maybeSingle();
+  if (r.data) _applyEmpCache[no] = r.data;
+  return r.data || null;
+}
+function currentEventId(subtype, startDate) {
+  var row = document.getElementById('apply-event-row');
+  var sel = document.getElementById('apply-event');
+  if (!row || row.style.display === 'none' || !sel || !sel.value) return null;
+  return sel.value;
+}
+async function initQuotaApply() {
+  await loadLeaveRules(true);
+  var row = document.getElementById('apply-onbehalf-row');
+  var orow = document.getElementById('apply-override-row');
+  if (!currentUser || !currentUser.is_hr) { row.style.display = 'none'; orow.style.display = 'none'; refreshQuotaUI(); return; }
+  row.style.display = 'block';
+  orow.style.display = 'block';
+  var r = await sb.from('employees').select('emp_no,name,unit_id,unit_name').eq('is_active', true);
+  var emps = (r.data||[]).filter(function(e){ return e.emp_no !== currentUser.emp_no; });
+  emps.sort(function(a,b){
+    var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
+    if (ai === -1) ai = 99; if (bi === -1) bi = 99;
+    if (ai !== bi) return ai - bi;
+    return a.name.localeCompare(b.name, 'zh-TW');
+  });
+  document.getElementById('apply-onbehalf').innerHTML = '<option value="">本人</option>' +
+    emps.map(function(e){ return '<option value="'+e.emp_no+'">'+escQ(e.unit_name)+'　'+escQ(e.name)+'</option>'; }).join('');
+  refreshQuotaUI();
+}
+function onBehalfChanged() {
+  // 換人時清掉代理人選擇，避免代理人是當事人本人
+  document.getElementById('apply-proxy-name').value = '';
+  proxyData = {};
+  var pi = document.getElementById('proxy-info'); if (pi) { pi.textContent=''; pi.style.display='none'; }
+  refreshQuotaUI();
+}
+function resetQuotaApply() {
+  var bo = document.getElementById('apply-onbehalf'); if (bo) bo.value = '';
+  var cb = document.getElementById('apply-override'); if (cb) cb.checked = false;
+  var rs = document.getElementById('apply-override-reason'); if (rs) { rs.value = ''; rs.style.display = 'none'; }
+  refreshQuotaUI();
+}
+async function refreshQuotaUI(keepEvent) {
+  if (!currentUser) return;
+  var token = ++_quotaUiToken;
+  var info = document.getElementById('apply-quota-info');
+  var evRow = document.getElementById('apply-event-row');
+  var evSel = document.getElementById('apply-event');
+  var subtype = document.getElementById('apply-subtype').value;
+  var start = document.getElementById('apply-start-date').value || todayYMD();
+  var empNo = applyEmpNo();
+  await loadLeaveRules();
+  if (token !== _quotaUiToken) return;
+  var rules = rulesFor(subtype, start);
+  var evRule = rules.filter(function(r){ return r.scope === 'event'; })[0];
+  if (evRule) {
+    if (!keepEvent) {
+      var prev = evSel.value;
+      var er = await sb.from('leave_events').select('*').eq('emp_no', empNo)
+        .eq('kind', evRule.event_kind).eq('is_closed', false).order('event_date', { ascending: false });
+      if (token !== _quotaUiToken) return;
+      var evs = (er.data||[]).filter(function(e){ return e.quotas && e.quotas[subtype] != null; });
+      if (!evs.length) {
+        evSel.innerHTML = '<option value="">（尚無事件紀錄，請洽人事建立）</option>';
+      } else {
+        evSel.innerHTML = evs.map(function(e){
+          return '<option value="'+e.id+'">'+escQ(eventLabel(e))+'</option>';
+        }).join('');
+        if (prev && evs.some(function(e){ return e.id === prev; })) evSel.value = prev;
+      }
+    }
+    evRow.style.display = 'block';
+  } else {
+    evRow.style.display = 'none';
+    evSel.innerHTML = '';
+  }
+  var st = await computeQuotaStatus(empNo, subtype, start, currentEventId(subtype, start));
+  if (token !== _quotaUiToken) return;
+  if (!st.length) { info.style.display = 'none'; info.innerHTML = ''; return; }
+  var warn = false;
+  var lines = st.map(function(s){
+    if (s.needEvent) { warn = true; return '📌 請「' + escQ(s.label) + '」需先選擇人事建立的事件紀錄'; }
+    var remain = s.cap - s.used;
+    if (remain <= 0) warn = true;
+    return (remain <= 0 ? '⛔ ' : '📊 ') + escQ(s.label) + '：上限 ' + fmtD(s.cap) + ' 天，已請 ' + fmtD(s.used) +
+      ' 天（含審核中），<b>剩餘 ' + fmtD(Math.max(remain,0)) + ' 天</b>' + (s.hard ? '' : '（超過只提醒）');
+  });
+  info.innerHTML = lines.join('<br>');
+  info.style.background = warn ? '#fdf0f1' : '#eef8f6';
+  info.style.border = '1px solid ' + (warn ? '#EE7785' : '#67D5B5');
+  info.style.color = warn ? '#a33' : '#1f5f5e';
+  info.style.display = 'block';
+}
+function eventLabel(e) {
+  var d = String(e.event_date||'').replace(/-/g,'/');
+  var k = e.kind === '喪' ? '喪' : e.kind;
+  return k + '　' + d + (e.detail ? '　' + e.detail : '');
+}
+
+// ── 人事：額度管理頁 ──
+var _qovEmps = [], _qovCols = [], _qovUsed = {}, _qovQuota = {}, _qevList = [], _qevUsed = {}, _qevEmpMap = {}, _qevEditing = null;
+
+function quotaTab(t) {
+  ['ov','ev','set'].forEach(function(k){
+    document.getElementById('qtab-'+k).classList.toggle('on', k === t);
+    document.getElementById('qpane-'+k).style.display = (k === t) ? 'block' : 'none';
+  });
+  document.getElementById('qbar-ov').style.display = t === 'ov' ? 'flex' : 'none';
+  document.getElementById('qbar-ev').style.display = t === 'ev' ? 'flex' : 'none';
+  if (t === 'ov') loadQuotaOverview();
+  if (t === 'ev') loadQuotaEvents();
+  if (t === 'set') renderQuotaSettings();
+}
+
+function sortEmpsByUnit(list) {
+  list.sort(function(a,b){
+    var ai = UNIT_ORDER.indexOf(a.unit_id), bi = UNIT_ORDER.indexOf(b.unit_id);
+    if (ai === -1) ai = 99; if (bi === -1) bi = 99;
+    if (ai !== bi) return ai - bi;
+    return a.name.localeCompare(b.name, 'zh-TW');
+  });
+  return list;
+}
+
+async function loadQuotaOverview() {
+  var pane = document.getElementById('qpane-ov');
+  pane.innerHTML = '載入中...';
+  await loadLeaveRules(true);
+  var thisYear = new Date().getFullYear();
+  var ys = document.getElementById('qov-year');
+  if (!ys.options.length) {
+    ys.innerHTML = [thisYear+1, thisYear, thisYear-1, thisYear-2].map(function(y){
+      return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+y+' 年</option>';
+    }).join('');
+  }
+  var year = parseInt(ys.value, 10) || thisYear;
+  var refDate = year + '-12-31';
+  // 欄位：特休 + 每年上限的假別（依規則表，同組合併）
+  _qovCols = [];
+  (LEAVE_RULES||[]).forEach(function(r){
+    if (!(refDate >= r.effective_from && (year+'-01-01') <= r.effective_to)) return;
+    if (r.scope === 'annual') {
+      if (!_qovCols.some(function(c){ return c.key === 'annual'; })) _qovCols.push({ key:'annual', label:'特休', subs:['特別休假'], cap:null, hard:r.hard_block });
+    } else if (r.scope === 'year') {
+      var key = r.count_group || r.leave_subtype;
+      if (_qovCols.some(function(c){ return c.key === key; })) return;
+      _qovCols.push({ key:key, label: r.count_group ? r.count_group.replace('組','') : r.leave_subtype,
+        subs: r.count_group ? groupSubtypes(r.count_group) : [r.leave_subtype], cap:Number(r.quota_days), hard:r.hard_block });
+    }
+  });
+  var er = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days').eq('is_active', true);
+  _qovEmps = sortEmpsByUnit(er.data || []);
+  var rows = await fetchAllRows('leave_requests', 'id,emp_no,days,leave_type,leave_subtype,status,start_date', function(q){
+    return q.in('status',['approved','pending']).gte('start_date', year+'-01-01').lte('start_date', year+'-12-31');
+  });
+  _qovQuota = await loadQuotaMap(year) || {};
+  _qovUsed = {};
+  rows.forEach(function(r){
+    _qovCols.forEach(function(c){
+      if (c.subs.indexOf(r.leave_subtype) < 0) return;
+      if (c.key === 'annual' && r.leave_type !== '休假') return;
+      var k = r.emp_no + '|' + c.key;
+      _qovUsed[k] = (_qovUsed[k]||0) + (Number(r.days)||0);
+    });
+  });
+  var us = document.getElementById('qov-unit'), prev = us.value, units = [];
+  _qovEmps.forEach(function(e){ if (e.unit_name && units.indexOf(e.unit_name) < 0) units.push(e.unit_name); });
+  us.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+escQ(u)+'">'+escQ(u)+'</option>'; }).join('');
+  us.value = prev;
+  renderQuotaOverview();
+}
+function qovCell(e, c) {
+  var used = _qovUsed[e.emp_no + '|' + c.key] || 0;
+  var cap = c.key === 'annual'
+    ? (_qovQuota[e.emp_no] !== undefined ? _qovQuota[e.emp_no] : null)
+    : c.cap;
+  return { used: used, cap: cap, ratio: (cap ? used / cap : (used > 0 && cap === 0 ? 1 : 0)) };
+}
+function renderQuotaOverview() {
+  var unit = document.getElementById('qov-unit').value;
+  var near = document.getElementById('qov-near').checked;
+  var emps = _qovEmps.filter(function(e){ return !unit || e.unit_name === unit; });
+  if (near) emps = emps.filter(function(e){ return _qovCols.some(function(c){ return qovCell(e,c).ratio >= 0.8; }); });
+  var groups = {}, order = [];
+  emps.forEach(function(e){ var k = e.unit_name || '其他'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(e); });
+  var w = Math.floor(75 / Math.max(_qovCols.length,1));
+  var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假超過只提醒。</div>';
+  order.forEach(function(u){
+    html += '<div style="margin-bottom:.6rem;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;">';
+    html += '<div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:14px;">'+escQ(u)+'</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f0f4f0;">' +
+      '<th style="padding:6px 10px;text-align:left;color:var(--muted);font-size:14px;width:25%;">姓名</th>' +
+      _qovCols.map(function(c){ return '<th style="padding:6px 4px;text-align:center;color:var(--muted);font-size:14px;width:'+w+'%;">'+escQ(c.label)+'</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    groups[u].forEach(function(e, i){
+      html += '<tr style="'+(i%2?'background:#f8faf8;':'')+'"><td style="padding:7px 10px;font-size:14px;">'+escQ(maskName(e.name))+'</td>';
+      _qovCols.forEach(function(c){
+        var v = qovCell(e, c);
+        var color = v.cap === null ? 'color:var(--muted);' : v.ratio >= 1 ? 'color:#e74c3c;font-weight:700;' : v.ratio >= 0.8 ? 'color:#e67e22;font-weight:600;' : '';
+        html += '<td style="padding:7px 4px;text-align:center;font-size:14px;'+color+'">'+fmtD(v.used)+'／'+(v.cap === null ? '未設定' : fmtD(v.cap))+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  document.getElementById('qpane-ov').innerHTML = order.length ? html : html + '<div class="empty-hint">沒有符合的資料</div>';
+}
+function downloadCsv(rows, filename) {
+  var csv = rows.map(function(r){ return r.map(function(v){
+    v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+  }).join(','); }).join('\n');
+  var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function downloadQuotaOverview() {
+  var year = document.getElementById('qov-year').value;
+  var head = ['單位','姓名'];
+  _qovCols.forEach(function(c){ head.push(c.label+'已請', c.label+'上限', c.label+'剩餘'); });
+  var rows = [head];
+  _qovEmps.forEach(function(e){
+    var row = [e.unit_name, e.name];
+    _qovCols.forEach(function(c){ var v = qovCell(e,c); row.push(v.used, v.cap === null ? '未設定' : v.cap, v.cap === null ? '' : v.cap - v.used); });
+    rows.push(row);
+  });
+  downloadCsv(rows, '假別額度總覽_' + year + '_' + todayYMD() + '.csv');
+}
+
+// 事件紀錄
+async function loadQuotaEvents() {
+  var pane = document.getElementById('qpane-ev');
+  pane.innerHTML = '載入中...';
+  await loadLeaveRules(true);
+  var er = await sb.from('leave_events').select('*').order('event_date', { ascending: false });
+  _qevList = er.data || [];
+  var emps = await sb.from('employees').select('emp_no,name,unit_id,unit_name,is_active');
+  _qevEmpMap = {};
+  (emps.data||[]).forEach(function(e){ _qevEmpMap[e.emp_no] = e; });
+  _qevUsed = {};
+  if (_qevList.length) {
+    var rows = await fetchAllRows('leave_requests', 'id,event_id,leave_subtype,days,status', function(q){
+      return q.not('event_id','is',null).in('status',['approved','pending']);
+    });
+    rows.forEach(function(r){ var k = r.event_id + '|' + r.leave_subtype; _qevUsed[k] = (_qevUsed[k]||0) + (Number(r.days)||0); });
+  }
+  renderQuotaEvents();
+}
+// 產假、陪產：超過舊制天數的部分＝新增天數，可向勞動部申請補助
+var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':7 };
+function renderQuotaEvents() {
+  var f = document.getElementById('qev-filter').value;
+  var list = _qevList.filter(function(e){ return f === 'all' || !e.is_closed; });
+  if (!list.length) { document.getElementById('qpane-ev').innerHTML = '<div class="empty-hint">沒有事件紀錄。產假、產檢假、陪產檢及陪產假、婚假、喪假，都要先在這裡建立事件，同仁才能請。</div>'; return; }
+  document.getElementById('qpane-ev').innerHTML = list.map(function(e){
+    var emp = _qevEmpMap[e.emp_no] || { name: e.emp_no, unit_name: '' };
+    var lines = Object.keys(e.quotas || {}).map(function(sub){
+      var cap = Number(e.quotas[sub]), used = _qevUsed[e.id + '|' + sub] || 0, remain = cap - used;
+      var color = remain <= 0 ? 'color:#e74c3c;font-weight:700;' : (cap && used/cap >= 0.8) ? 'color:#e67e22;font-weight:600;' : '';
+      var sub2 = '';
+      if (SUBSIDY_BASE[sub] && cap > SUBSIDY_BASE[sub]) {
+        var extra = Math.max(0, used - SUBSIDY_BASE[sub]);
+        sub2 = '<div style="font-size:12px;color:#4F86C6;margin-left:1em;">其中新增天數（可申請補助）已請 ' + fmtD(extra) + ' 天</div>';
+      }
+      return '<div style="'+color+'">' + escQ(sub) + '：已請 ' + fmtD(used) + '／' + fmtD(cap) + ' 天，剩餘 ' + fmtD(Math.max(remain,0)) + ' 天</div>' + sub2;
+    }).join('');
+    return '<div class="qcard"' + (e.is_closed ? ' style="opacity:.6;"' : '') + '>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">' +
+        '<div><b>' + escQ(emp.name) + '</b><span style="font-size:12px;color:var(--muted);margin-left:6px;">' + escQ(emp.unit_name) + '</span>' +
+        '<span class="qbadge" style="background:#e8f6f3;color:#379392;">' + escQ(e.kind) + '</span>' +
+        (e.is_closed ? '<span class="qbadge" style="background:#f1eaf7;color:#6C49B8;">已結案</span>' : '') + '</div>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button onclick="openEventForm(\'' + e.id + '\')" style="padding:4px 10px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">編輯</button>' +
+          '<button onclick="toggleEventClosed(\'' + e.id + '\')" style="padding:4px 10px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">' + (e.is_closed ? '重新開啟' : '結案') + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--muted);">' + String(e.event_date).replace(/-/g,'/') + (e.detail ? '　' + escQ(e.detail) : '') + (e.note ? '　｜' + escQ(e.note) : '') + '</div>' +
+      lines +
+    '</div>';
+  }).join('');
+}
+function downloadQuotaEvents() {
+  var rows = [['單位','姓名','事件種類','事件日期','細節','假別','可請天數','已請天數','剩餘天數','新增天數已請(可申請補助)','狀態','備註']];
+  _qevList.forEach(function(e){
+    var emp = _qevEmpMap[e.emp_no] || { name: e.emp_no, unit_name: '' };
+    Object.keys(e.quotas || {}).forEach(function(sub){
+      var cap = Number(e.quotas[sub]), used = _qevUsed[e.id + '|' + sub] || 0;
+      var extra = (SUBSIDY_BASE[sub] && cap > SUBSIDY_BASE[sub]) ? Math.max(0, used - SUBSIDY_BASE[sub]) : '';
+      rows.push([emp.unit_name, emp.name, e.kind, e.event_date, e.detail||'', sub, cap, used, cap - used, extra, e.is_closed ? '已結案' : '使用中', e.note||'']);
+    });
+  });
+  downloadCsv(rows, '假別事件紀錄_' + todayYMD() + '.csv');
+}
+async function toggleEventClosed(id) {
+  var e = _qevList.filter(function(x){ return x.id === id; })[0];
+  if (!e) return;
+  if (!confirm(e.is_closed ? '確定重新開啟這筆事件？' : '確定結案？結案後同仁不能再用這筆事件請假。')) return;
+  var r = await sb.from('leave_events').update({ is_closed: !e.is_closed }).eq('id', id).select();
+  if (r.error || !r.data || r.data.length !== 1) { alert('更新失敗：' + (r.error ? r.error.message : '沒有權限')); return; }
+  loadQuotaEvents();
+}
+function defaultEventQuotas(kind, date, relation) {
+  var q = {};
+  (QUOTA_EVENT_KIND_SUBS[kind] || []).forEach(function(sub){
+    var r = rulesFor(sub, date || todayYMD()).filter(function(x){ return x.scope === 'event'; })[0];
+    q[sub] = (r && r.quota_days != null) ? Number(r.quota_days) : '';
+  });
+  if (kind === '喪') {
+    var f = FUNERAL_DAYS.filter(function(x){ return x[0] === relation; })[0];
+    q['喪假'] = f ? f[1] : '';
+  }
+  return q;
+}
+async function openEventForm(id) {
+  await loadLeaveRules(true);
+  _qevEditing = id ? _qevList.filter(function(x){ return x.id === id; })[0] : null;
+  var empSel = document.getElementById('ev-emp');
+  var emps = Object.keys(_qevEmpMap).map(function(k){ return _qevEmpMap[k]; }).filter(function(e){ return e.is_active !== false; });
+  if (!emps.length) {
+    var r = await sb.from('employees').select('emp_no,name,unit_id,unit_name,is_active').eq('is_active', true);
+    emps = r.data || [];
+    emps.forEach(function(e){ _qevEmpMap[e.emp_no] = e; });
+  }
+  sortEmpsByUnit(emps);
+  empSel.innerHTML = '<option value="">請選擇</option>' + emps.map(function(e){
+    return '<option value="'+e.emp_no+'">'+escQ(e.unit_name)+'　'+escQ(e.name)+'</option>';
+  }).join('');
+  document.getElementById('ev-rel').innerHTML = '<option value="">請選擇</option>' + FUNERAL_DAYS.map(function(x){
+    return '<option value="'+x[0]+'">'+x[0]+'（'+x[1]+' 天）</option>';
+  }).join('');
+  document.getElementById('ev-error').style.display = 'none';
+  var E = _qevEditing;
+  document.getElementById('ev-title').textContent = E ? '編輯事件紀錄' : '新增事件紀錄';
+  empSel.value = E ? E.emp_no : '';
+  empSel.disabled = !!E;
+  document.getElementById('ev-kind').value = E ? E.kind : '孕產';
+  document.getElementById('ev-kind').disabled = !!E;
+  document.getElementById('ev-date').value = E ? E.event_date : '';
+  document.getElementById('ev-note').value = E ? (E.note||'') : '';
+  if (E && E.kind === '喪') {
+    document.getElementById('ev-rel').value = FUNERAL_DAYS.some(function(x){ return x[0] === E.detail; }) ? E.detail : '';
+    document.getElementById('ev-detail').value = '';
+  } else {
+    document.getElementById('ev-detail').value = E ? (E.detail||'') : '';
+  }
+  evFormChanged(!E);
+  if (E) renderEventQuotaInputs(E.kind, E.quotas || {});
+  document.getElementById('event-modal').style.display = 'flex';
+}
+function closeEventForm() { document.getElementById('event-modal').style.display = 'none'; }
+function evFormChanged(refill) {
+  var kind = document.getElementById('ev-kind').value;
+  var isFun = kind === '喪';
+  document.getElementById('ev-rel-row').style.display = isFun ? 'block' : 'none';
+  document.getElementById('ev-detail').parentElement.style.display = isFun ? 'none' : 'block';
+  document.getElementById('ev-date-label').textContent =
+    kind === '孕產' || kind === '配偶孕產' ? '預產期／分娩日' : kind === '結婚' ? '結婚登記日' : '亡故日期';
+  document.getElementById('ev-detail').placeholder =
+    kind === '孕產' ? '例：流產（妊娠 3 個月以上）' : kind === '結婚' ? '' : '';
+  if (refill) renderEventQuotaInputs(kind, defaultEventQuotas(kind, document.getElementById('ev-date').value, document.getElementById('ev-rel').value));
+}
+function renderEventQuotaInputs(kind, q) {
+  document.getElementById('ev-quotas').innerHTML = (QUOTA_EVENT_KIND_SUBS[kind] || []).map(function(sub){
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="flex:1;font-size:14px;">' + sub + '</span>' +
+      '<input type="number" step="0.5" min="0" data-sub="' + sub + '" value="' + (q[sub] === '' || q[sub] == null ? '' : q[sub]) + '" style="width:90px;"> 天</div>';
+  }).join('');
+}
+async function saveEvent() {
+  var err = document.getElementById('ev-error');
+  err.style.display = 'none';
+  var E = _qevEditing;
+  var emp = document.getElementById('ev-emp').value;
+  var kind = document.getElementById('ev-kind').value;
+  var date = document.getElementById('ev-date').value;
+  var detail = kind === '喪' ? document.getElementById('ev-rel').value : document.getElementById('ev-detail').value.trim();
+  var note = document.getElementById('ev-note').value.trim();
+  if (!emp) { err.textContent = '請選擇同仁'; err.style.display = 'block'; return; }
+  if (!date) { err.textContent = '請填日期'; err.style.display = 'block'; return; }
+  if (kind === '喪' && !detail) { err.textContent = '請選擇亡故親屬'; err.style.display = 'block'; return; }
+  var quotas = {}, bad = false;
+  document.querySelectorAll('#ev-quotas input[data-sub]').forEach(function(inp){
+    var v = parseFloat(inp.value);
+    if (isNaN(v) || v < 0) bad = true; else quotas[inp.getAttribute('data-sub')] = v;
+  });
+  if (bad) { err.textContent = '請填寫每個假別的可請天數'; err.style.display = 'block'; return; }
+  var res;
+  if (E) {
+    res = await sb.from('leave_events').update({ event_date: date, detail: detail || null, quotas: quotas, note: note || null }).eq('id', E.id).select();
+  } else {
+    res = await sb.from('leave_events').insert({ emp_no: emp, kind: kind, event_date: date, detail: detail || null, quotas: quotas, note: note || null, created_by: currentUser.emp_no }).select();
+  }
+  if (res.error || !res.data || res.data.length !== 1) { err.textContent = '儲存失敗：' + (res.error ? res.error.message : '沒有權限'); err.style.display = 'block'; return; }
+  closeEventForm();
+  loadQuotaEvents();
+}
+
+// 設定：新制生效日、檢查開關
+function newRuleDate() {
+  var d = null;
+  (LEAVE_RULES||[]).forEach(function(r){ if (r.effective_from > '1900-01-01' && (!d || r.effective_from < d)) d = r.effective_from; });
+  return d;
+}
+async function renderQuotaSettings() {
+  await loadLeaveRules(true);
+  var d = newRuleDate();
+  var pane = document.getElementById('qpane-set');
+  pane.innerHTML =
+    '<div class="qcard">' +
+      '<div style="font-weight:700;margin-bottom:6px;">新制生效日（性平法 115/11/13 修正）</div>' +
+      '<div style="font-size:13px;color:var(--muted);margin-bottom:8px;">產假 98 天、產檢假 14 天、陪產檢及陪產假 14 天從這天起適用，前一天以前照舊制。行政院公告施行日後請核對一次。</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;"><input type="date" id="qset-date" value="' + (d||'') + '" style="flex:1;">' +
+      '<button class="qbtn" onclick="saveNewRuleDate()">儲存</button></div>' +
+      '<div style="font-size:12px;color:#a33;margin-top:8px;">⚠️ 改日期不會自動改已建立的事件天數。已建立、且跨到新制期間的事件，請到「事件紀錄」逐筆檢查。</div>' +
+    '</div>' +
+    '<div class="qcard">' +
+      '<div style="font-weight:700;margin-bottom:6px;">天數上限檢查</div>' +
+      '<div style="font-size:14px;margin-bottom:8px;">目前：' + (QUOTA_ENFORCE
+        ? '<b style="color:#379392;">開啟</b>（超過上限會擋下）'
+        : '<b style="color:#e67e22;">關閉</b>（只顯示剩餘天數，不擋）') + '</div>' +
+      '<button class="qbtn" style="background:' + (QUOTA_ENFORCE ? '#EE7785' : '#379392') + ';" onclick="toggleQuotaEnforce()">' + (QUOTA_ENFORCE ? '關閉檢查' : '開啟檢查') + '</button>' +
+    '</div>';
+}
+async function saveNewRuleDate() {
+  var nd = document.getElementById('qset-date').value;
+  var od = newRuleDate();
+  if (!nd || !od) { alert('請選擇日期'); return; }
+  if (nd === od) { alert('日期沒有變更'); return; }
+  if (!confirm('確定把新制生效日從 ' + od.replace(/-/g,'/') + ' 改成 ' + nd.replace(/-/g,'/') + '？')) return;
+  var prevOld = fmtDateYMD(new Date(new Date(od + 'T00:00:00').getTime() - 86400000));
+  var prevNew = fmtDateYMD(new Date(new Date(nd + 'T00:00:00').getTime() - 86400000));
+  var a = await sb.from('leave_rules').update({ effective_from: nd }).eq('effective_from', od).select();
+  var b = await sb.from('leave_rules').update({ effective_to: prevNew }).eq('effective_to', prevOld).select();
+  if (a.error || b.error || !a.data.length || !b.data.length) {
+    alert('儲存失敗：' + ((a.error||b.error||{}).message || '沒有權限')); renderQuotaSettings(); return;
+  }
+  alert('✅ 新制生效日已改為 ' + nd.replace(/-/g,'/'));
+  renderQuotaSettings();
+}
+async function toggleQuotaEnforce() {
+  var to = QUOTA_ENFORCE ? 'off' : 'on';
+  if (!confirm(to === 'on' ? '確定開啟？開啟後超過上限的假單會被擋下。' : '確定關閉？關閉後不再擋超額假單。')) return;
+  var r = await sb.from('app_settings').update({ value: to }).eq('key', 'leave_quota_enforce').select();
+  if (r.error || !r.data || r.data.length !== 1) { alert('更新失敗：' + (r.error ? r.error.message : '沒有權限')); return; }
+  await loadLeaveRules(true);
+  renderQuotaSettings();
 }
 
 updateSubtype();
