@@ -88,6 +88,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   -webkit-appearance:none; appearance:none;
 }
 .form-row select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a7a65'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+.form-row input[type=checkbox] { -webkit-appearance:checkbox; appearance:auto; width:18px !important; height:18px; min-height:0; padding:0; margin:0; flex-shrink:0; accent-color:var(--primary); cursor:pointer; }
 .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline:none; border-color:var(--primary-light); background:#fff; }
 .form-row textarea { min-height:80px; resize:vertical; }
 .form-2col { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
@@ -2389,7 +2390,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v164';
+  if (dbg) dbg.textContent = 'v166';
   renderCalendar();
 }
 
@@ -3698,6 +3699,7 @@ function eventLabel(e) {
 }
 
 // ── 人事：額度管理頁 ──
+var _qovOver = {};
 var _qovEmps = [], _qovCols = [], _qovUsed = {}, _qovQuota = {}, _qevList = [], _qevUsed = {}, _qevEmpMap = {}, _qevEditing = null;
 
 function quotaTab(t) {
@@ -3754,6 +3756,20 @@ async function loadQuotaOverview() {
     return q.in('status',['approved','pending']).gte('start_date', year+'-01-01').lte('start_date', year+'-12-31');
   });
   _qovQuota = await loadQuotaMap(year) || {};
+  // v166：喪假欄（依事件計算，沒有年度上限，只列天數；有事件超過可請天數標紅）
+  _qovCols.push({ key:'funeral', label:'喪假', subs:['喪假'], cap:null, noCap:true });
+  _qovOver = {};
+  var fev = await sb.from('leave_events').select('id,emp_no,quotas').eq('kind','喪');
+  if (fev.data && fev.data.length) {
+    var fu = await sb.from('leave_requests').select('event_id,days').eq('leave_subtype','喪假')
+      .in('status',['approved','pending']).in('event_id', fev.data.map(function(x){ return x.id; }));
+    var fsum = {};
+    (fu.data||[]).forEach(function(x){ fsum[x.event_id] = (fsum[x.event_id]||0) + (Number(x.days)||0); });
+    fev.data.forEach(function(ev){
+      var cap = ev.quotas ? Number(ev.quotas['喪假']) : NaN;
+      if (!isNaN(cap) && (fsum[ev.id]||0) > cap) _qovOver[ev.emp_no + '|funeral'] = true;
+    });
+  }
   _qovUsed = {};
   rows.forEach(function(r){
     _qovCols.forEach(function(c){
@@ -3771,6 +3787,7 @@ async function loadQuotaOverview() {
 }
 function qovCell(e, c) {
   var used = _qovUsed[e.emp_no + '|' + c.key] || 0;
+  if (c.noCap) return { used: used, cap: null, noCap: true, ratio: _qovOver[e.emp_no + '|' + c.key] ? 1 : 0 };
   var cap = c.key === 'annual'
     ? (_qovQuota[e.emp_no] !== undefined ? _qovQuota[e.emp_no] : null)
     : c.cap;
@@ -3784,7 +3801,7 @@ function renderQuotaOverview() {
   var groups = {}, order = [];
   emps.forEach(function(e){ var k = e.unit_name || '其他'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(e); });
   var w = Math.floor(75 / Math.max(_qovCols.length,1));
-  var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假超過只提醒。</div>';
+  var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假超過只提醒。喪假依每位亡故親屬分開算，這裡只列今年已請天數；某筆喪假事件超過可請天數時標紅。</div>';
   order.forEach(function(u){
     html += '<div style="margin-bottom:.6rem;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;">';
     html += '<div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:14px;">'+escQ(u)+'</div>';
@@ -3796,6 +3813,11 @@ function renderQuotaOverview() {
       html += '<tr style="'+(i%2?'background:#f8faf8;':'')+'"><td style="padding:7px 10px;font-size:14px;">'+escQ(maskName(e.name))+'</td>';
       _qovCols.forEach(function(c){
         var v = qovCell(e, c);
+        if (v.noCap) {
+          var nc = v.ratio >= 1 ? 'color:#e74c3c;font-weight:700;' : (v.used > 0 ? '' : 'color:var(--muted);');
+          html += '<td style="padding:7px 4px;text-align:center;font-size:14px;'+nc+'">'+fmtD(v.used)+' 天</td>';
+          return;
+        }
         var color = v.cap === null ? 'color:var(--muted);' : v.ratio >= 1 ? 'color:#e74c3c;font-weight:700;' : v.ratio >= 0.8 ? 'color:#e67e22;font-weight:600;' : '';
         html += '<td style="padding:7px 4px;text-align:center;font-size:14px;'+color+'">'+fmtD(v.used)+'／'+(v.cap === null ? '未設定' : fmtD(v.cap))+'</td>';
       });
@@ -3818,11 +3840,11 @@ function downloadCsv(rows, filename) {
 function downloadQuotaOverview() {
   var year = document.getElementById('qov-year').value;
   var head = ['單位','姓名'];
-  _qovCols.forEach(function(c){ head.push(c.label+'已請', c.label+'上限', c.label+'剩餘'); });
+  _qovCols.forEach(function(c){ if (c.noCap) head.push(c.label+'已請'); else head.push(c.label+'已請', c.label+'上限', c.label+'剩餘'); });
   var rows = [head];
   _qovEmps.forEach(function(e){
     var row = [e.unit_name, e.name];
-    _qovCols.forEach(function(c){ var v = qovCell(e,c); row.push(v.used, v.cap === null ? '未設定' : v.cap, v.cap === null ? '' : v.cap - v.used); });
+    _qovCols.forEach(function(c){ var v = qovCell(e,c); if (c.noCap) { row.push(v.used); return; } row.push(v.used, v.cap === null ? '未設定' : v.cap, v.cap === null ? '' : v.cap - v.used); });
     rows.push(row);
   });
   downloadCsv(rows, '假別額度總覽_' + year + '_' + todayYMD() + '.csv');
