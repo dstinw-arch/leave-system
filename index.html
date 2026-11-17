@@ -619,7 +619,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <div id="event-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
       <div style="background:#fff;border-radius:14px;padding:22px 20px;max-width:380px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);">
         <div id="ev-title" style="font-size:16px;font-weight:700;margin-bottom:12px;">新增事件紀錄</div>
-        <div class="form-row"><label>同仁</label><select id="ev-emp"></select></div>
+        <div class="form-row"><label>同仁</label><select id="ev-emp" onchange="loadEventLeaves()"></select></div>
         <div class="form-row"><label>事件種類</label>
           <select id="ev-kind" onchange="evFormChanged(true)">
             <option value="孕產">孕產（本人懷孕／生產／流產）</option>
@@ -633,6 +633,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         <div class="form-row"><label id="ev-detail-label">細節（選填）</label><input type="text" id="ev-detail" placeholder="例：流產（妊娠 3 個月以上）"></div>
         <div class="form-row"><label>可請天數（依日期自動帶入，可修改）</label><div id="ev-quotas"></div></div>
         <div class="form-row"><label>備註（選填）</label><input type="text" id="ev-note"></div>
+        <div class="form-row"><label>連結假單（勾選屬於這次事件的假單）</label><div id="ev-leaves" style="font-size:13px;line-height:1.8;"></div></div>
         <div id="ev-error" class="error-msg"></div>
         <div style="display:flex;gap:10px;margin-top:14px;">
           <button onclick="closeEventForm()" style="flex:1;padding:10px;border:1.5px solid var(--border);background:#fff;border-radius:8px;font-size:14px;cursor:pointer;">取消</button>
@@ -1617,12 +1618,7 @@ async function confirmLeave() {
   var quotaNote = '';
   for (var _i = 0; _i < _qs.length; _i++) {
     var _s = _qs[_i];
-    if (_s.needEvent) {
-      if (QUOTA_ENFORCE && !_ovr) {
-        errEl.textContent='請「'+subtype+'」需先選擇事件紀錄。若下拉選單沒有可選的事件，請洽人事建立。'; errEl.style.display='block'; return;
-      }
-      continue;
-    }
+    if (_s.needEvent) continue;  // v163：人事事後建立事件
     var _remain = _s.cap - _s.used;
     if (days > _remain) {
       if (_s.hard && QUOTA_ENFORCE && !_ovr) {
@@ -2385,7 +2381,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v162';
+  if (dbg) dbg.textContent = 'v163';
   renderCalendar();
 }
 
@@ -3645,6 +3641,7 @@ async function refreshQuotaUI(keepEvent) {
   var rules = rulesFor(subtype, start);
   var evRule = rules.filter(function(r){ return r.scope === 'event'; })[0];
   if (evRule) {
+    // v163：人事事後建立事件。已有事件才顯示選單，可以不選
     if (!keepEvent) {
       var prev = evSel.value;
       var er = await sb.from('leave_events').select('*').eq('emp_no', empNo)
@@ -3652,21 +3649,23 @@ async function refreshQuotaUI(keepEvent) {
       if (token !== _quotaUiToken) return;
       var evs = (er.data||[]).filter(function(e){ return e.quotas && e.quotas[subtype] != null; });
       if (!evs.length) {
-        evSel.innerHTML = '<option value="">（尚無事件紀錄，請洽人事建立）</option>';
+        evSel.innerHTML = '';
+        evRow.style.display = 'none';
       } else {
-        evSel.innerHTML = evs.map(function(e){
+        evSel.innerHTML = '<option value="">不選（人事事後處理）</option>' + evs.map(function(e){
           return '<option value="'+e.id+'">'+escQ(eventLabel(e))+'</option>';
         }).join('');
         if (prev && evs.some(function(e){ return e.id === prev; })) evSel.value = prev;
+        evRow.style.display = 'block';
       }
     }
-    evRow.style.display = 'block';
   } else {
     evRow.style.display = 'none';
     evSel.innerHTML = '';
   }
   var st = await computeQuotaStatus(empNo, subtype, start, currentEventId(subtype, start));
   if (token !== _quotaUiToken) return;
+  st = st.filter(function(x){ return !x.needEvent; });
   if (!st.length) { info.style.display = 'none'; info.innerHTML = ''; return; }
   var warn = false;
   var lines = st.map(function(s){
@@ -3836,15 +3835,42 @@ async function loadQuotaEvents() {
     });
     rows.forEach(function(r){ var k = r.event_id + '|' + r.leave_subtype; _qevUsed[k] = (_qevUsed[k]||0) + (Number(r.days)||0); });
   }
+  var evSubs = [];
+  Object.keys(QUOTA_EVENT_KIND_SUBS).forEach(function(k){ evSubs = evSubs.concat(QUOTA_EVENT_KIND_SUBS[k]); });
+  var pr = await sb.from('leave_requests').select('id,emp_no,leave_subtype,start_date,days,status')
+    .is('event_id', null).in('status',['approved','pending']).in('leave_subtype', evSubs)
+    .gte('created_at', EVENT_TRACK_FROM).order('start_date', { ascending: false }).limit(500);
+  _qevPending = pr.data || [];
   renderQuotaEvents();
 }
 // 產假、陪產：超過舊制天數的部分＝新增天數，可向勞動部申請補助
 var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':7 };
+var EVENT_TRACK_FROM = '2026-11-16';  // v162 上線日；之前的舊假單不列入待補建
+var _qevPending = [];
+function subtypeKind(sub) {
+  var k = null;
+  Object.keys(QUOTA_EVENT_KIND_SUBS).forEach(function(x){ if (QUOTA_EVENT_KIND_SUBS[x].indexOf(sub) >= 0) k = x; });
+  return k;
+}
 function renderQuotaEvents() {
   var f = document.getElementById('qev-filter').value;
   var list = _qevList.filter(function(e){ return f === 'all' || !e.is_closed; });
-  if (!list.length) { document.getElementById('qpane-ev').innerHTML = '<div class="empty-hint">沒有事件紀錄。產假、產檢假、陪產檢及陪產假、婚假、喪假，都要先在這裡建立事件，同仁才能請。</div>'; return; }
-  document.getElementById('qpane-ev').innerHTML = list.map(function(e){
+  var pendHtml = '';
+  if (_qevPending.length) {
+    pendHtml = '<div class="qcard" style="border:1.5px solid #EE7785;background:#fdf0f1;">' +
+      '<div style="font-weight:700;color:#c0392b;margin-bottom:4px;">📌 待補建事件（' + _qevPending.length + ' 筆假單）</div>' +
+      '<div style="font-size:12px;color:#a33;margin-bottom:6px;">這些假單還沒對到事件，建立事件時勾選連結。</div>' +
+      _qevPending.map(function(r){
+        var emp = _qevEmpMap[r.emp_no] || { name: r.emp_no, unit_name: '' };
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-top:1px dashed #f3c1c6;">' +
+          '<div style="font-size:13px;"><b>' + escQ(emp.name) + '</b> <span style="color:var(--muted);font-size:12px;">' + escQ(emp.unit_name) + '</span><br>' +
+          escQ(r.leave_subtype) + '　' + String(r.start_date).replace(/-/g,'/') + '　' + fmtD(r.days) + ' 天' + (r.status === 'pending' ? '（審核中）' : '') + '</div>' +
+          '<button onclick="openEventForm(null,{emp:\'' + r.emp_no + '\',kind:\'' + subtypeKind(r.leave_subtype) + '\',date:\'' + r.start_date + '\'})" style="padding:5px 10px;border:none;background:#379392;color:#fff;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">建立事件</button>' +
+        '</div>';
+      }).join('') + '</div>';
+  }
+  if (!list.length) { document.getElementById('qpane-ev').innerHTML = pendHtml + '<div class="empty-hint">沒有事件紀錄。同仁請產假、產檢假、陪產檢及陪產假、婚假、喪假後，人事在這裡建立事件並連結假單。</div>'; return; }
+  document.getElementById('qpane-ev').innerHTML = pendHtml + list.map(function(e){
     var emp = _qevEmpMap[e.emp_no] || { name: e.emp_no, unit_name: '' };
     var lines = Object.keys(e.quotas || {}).map(function(sub){
       var cap = Number(e.quotas[sub]), used = _qevUsed[e.id + '|' + sub] || 0, remain = cap - used;
@@ -3903,7 +3929,25 @@ function defaultEventQuotas(kind, date, relation) {
   }
   return q;
 }
-async function openEventForm(id) {
+async function loadEventLeaves() {
+  var box = document.getElementById('ev-leaves');
+  var emp = document.getElementById('ev-emp').value;
+  var kind = document.getElementById('ev-kind').value;
+  var E = _qevEditing;
+  if (!emp) { box.innerHTML = '<span style="color:var(--muted);">請先選擇同仁</span>'; return; }
+  box.innerHTML = '載入中...';
+  var r = await sb.from('leave_requests').select('id,leave_subtype,start_date,days,status,event_id')
+    .eq('emp_no', emp).in('status',['approved','pending']).in('leave_subtype', QUOTA_EVENT_KIND_SUBS[kind] || [])
+    .order('start_date', { ascending: false }).limit(100);
+  var rows = (r.data||[]).filter(function(x){ return !x.event_id || (E && x.event_id === E.id); });
+  if (!rows.length) { box.innerHTML = '<span style="color:var(--muted);">沒有可連結的假單</span>'; return; }
+  box.innerHTML = rows.map(function(x){
+    var on = E && x.event_id === E.id;
+    return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" style="width:auto;" data-leave="' + x.id + '" data-was="' + (on?1:0) + '"' + (on?' checked':'') + '>' +
+      escQ(x.leave_subtype) + '　' + String(x.start_date).replace(/-/g,'/') + '　' + fmtD(x.days) + ' 天' + (x.status === 'pending' ? '（審核中）' : '') + '</label>';
+  }).join('');
+}
+async function openEventForm(id, prefill) {
   await loadLeaveRules(true);
   _qevEditing = id ? _qevList.filter(function(x){ return x.id === id; })[0] : null;
   var empSel = document.getElementById('ev-emp');
@@ -3935,8 +3979,14 @@ async function openEventForm(id) {
   } else {
     document.getElementById('ev-detail').value = E ? (E.detail||'') : '';
   }
+  if (!E && prefill) {
+    empSel.value = prefill.emp || '';
+    if (prefill.kind) document.getElementById('ev-kind').value = prefill.kind;
+    if (prefill.date) document.getElementById('ev-date').value = prefill.date;
+  }
   evFormChanged(!E);
   if (E) renderEventQuotaInputs(E.kind, E.quotas || {});
+  loadEventLeaves();
   document.getElementById('event-modal').style.display = 'flex';
 }
 function closeEventForm() { document.getElementById('event-modal').style.display = 'none'; }
@@ -3950,6 +4000,7 @@ function evFormChanged(refill) {
   document.getElementById('ev-detail').placeholder =
     kind === '孕產' ? '例：流產（妊娠 3 個月以上）' : kind === '結婚' ? '' : '';
   if (refill) renderEventQuotaInputs(kind, defaultEventQuotas(kind, document.getElementById('ev-date').value, document.getElementById('ev-rel').value));
+  if (refill && document.getElementById('event-modal').style.display === 'flex') loadEventLeaves();
 }
 function renderEventQuotaInputs(kind, q) {
   document.getElementById('ev-quotas').innerHTML = (QUOTA_EVENT_KIND_SUBS[kind] || []).map(function(sub){
@@ -3982,6 +4033,16 @@ async function saveEvent() {
     res = await sb.from('leave_events').insert({ emp_no: emp, kind: kind, event_date: date, detail: detail || null, quotas: quotas, note: note || null, created_by: currentUser.emp_no }).select();
   }
   if (res.error || !res.data || res.data.length !== 1) { err.textContent = '儲存失敗：' + (res.error ? res.error.message : '沒有權限'); err.style.display = 'block'; return; }
+  var link = [], unlink = [];
+  document.querySelectorAll('#ev-leaves input[data-leave]').forEach(function(cb){
+    var was = cb.getAttribute('data-was') === '1';
+    if (cb.checked && !was) link.push(cb.getAttribute('data-leave'));
+    if (!cb.checked && was) unlink.push(cb.getAttribute('data-leave'));
+  });
+  if (link.length || unlink.length) {
+    var lr = await sb.rpc('hr_link_leave_event', { p_event: res.data[0].id, p_link: link, p_unlink: unlink });
+    if (lr.error) { alert('事件已儲存，但連結假單失敗：' + lr.error.message); }
+  }
   closeEventForm();
   loadQuotaEvents();
 }
