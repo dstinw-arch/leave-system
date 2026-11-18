@@ -1571,9 +1571,17 @@ document.addEventListener('click', function(e) {
 function updateSubtype() {
   const type = document.getElementById('apply-type').value;
   const sub = document.getElementById('apply-subtype');
-  sub.innerHTML = LEAVE_TYPES[type].map(s=>`<option value="${s}">${s}</option>`).join('');
+  var _prev = sub.value;
+  var _male = (typeof applyEmpNo === 'function' && currentUser) ? isMaleEmp(applyEmpNo()) : false;
+  var _list = LEAVE_TYPES[type].filter(function(s){ return !(_male && FEMALE_ONLY_SUBS.indexOf(s) >= 0); });
+  if (!_list.length) _list = LEAVE_TYPES[type];
+  sub.innerHTML = _list.map(s=>`<option value="${s}">${s}</option>`).join('');
+  if (_prev && _list.indexOf(_prev) >= 0) sub.value = _prev;
   refreshQuotaUI();
 }
+// v171：員編第 4 碼 1＝男、2＝女；生理假、產假、產檢假限女性
+var FEMALE_ONLY_SUBS = ['生理假','產假','產檢假'];
+function isMaleEmp(empNo) { return !!empNo && String(empNo).charAt(3) === '1'; }
 
 // ── 代理人可用性檢查：代理人在申請期間若也請假（核准或審核中）→ 擋下改選 ──
 async function proxyLeaveConflict(proxyEmpNo, startDate, endDate) {
@@ -1630,6 +1638,9 @@ async function confirmLeave() {
   // v162：假別天數上限檢查
   var _applyEmpNo = applyEmpNo();
   var _ovr = isQuotaOverride();
+  if (FEMALE_ONLY_SUBS.indexOf(subtype) >= 0 && isMaleEmp(_applyEmpNo) && !_ovr) {
+    errEl.textContent = subtype + '限女性同仁申請'; errEl.style.display='block'; return;
+  }
   var _evInfo = collectEvInfo(subtype, startDate);
   if (_evInfo && _evInfo.error) { errEl.textContent = _evInfo.error; errEl.style.display='block'; return; }
   if (_ovr && !document.getElementById('apply-override-reason').value.trim()) {
@@ -2418,7 +2429,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v170';
+  if (dbg) dbg.textContent = 'v171';
   renderCalendar();
 }
 
@@ -3684,7 +3695,7 @@ function onBehalfChanged() {
   document.getElementById('apply-proxy-name').value = '';
   proxyData = {};
   var pi = document.getElementById('proxy-info'); if (pi) { pi.textContent=''; pi.style.display='none'; }
-  refreshQuotaUI();
+  updateSubtype();
 }
 function resetQuotaApply() {
   _pendingQuotaWarning = null;
