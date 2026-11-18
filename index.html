@@ -1646,16 +1646,18 @@ async function confirmLeave() {
       if (!_ovr) { errEl.textContent = _s.roc + ' 年度特休天數尚未設定，要請 ' + _s.roc + ' 年度的特休請洽人事。'; errEl.style.display='block'; return; }
       continue;
     }
+    if (_s.info) continue;
     var _remain = _s.cap - _s.used;
-    if (days > _remain) {
+    var _add = quotaAdd(_s, days);
+    if (_add > _remain) {
       if (_s.hard && QUOTA_ENFORCE && !_ovr) {
-        errEl.textContent = _s.label + '剩餘 ' + fmtD(Math.max(_remain,0)) + ' 天，不足本次 ' + fmtD(days) + ' 天。超過的部分請改請特休或事假。';
+        errEl.textContent = _s.label + '剩餘 ' + fmtD(Math.max(_remain,0)) + ' 天，不足本次 ' + fmtD(days) + ' 天。' + (_s.tip || '超過的部分請改請特休或事假。');
         errEl.style.display='block'; return;
       }
-      _qWarn.push(_s.label + '連同本次共 ' + fmtD(_s.used + days) + ' 天，超過 ' + fmtD(_s.cap) + ' 天' + (_s.hard ? '' : '（未住院上限）'));
+      _qWarn.push(_s.label + '連同本次共 ' + fmtD(_s.used + _add) + ' 天，超過 ' + fmtD(_s.cap) + ' 天' + (_s.hard ? '' : '（未住院上限）'));
       if (!_s.hard) {
         quotaNote += '<div style="margin-top:10px;padding:8px 10px;background:#fff6e6;border:1px solid #f0c36d;border-radius:6px;font-size:12px;color:#8a5a00;line-height:1.6;">' +
-          '⚠️ ' + _s.label + '連同本次共 <b>' + fmtD(_s.used + days) + '</b> 天，超過 ' + fmtD(_s.cap) + ' 天（未住院上限）。仍可送出，人事會再確認。</div>';
+          '⚠️ ' + _s.label + '連同本次共 <b>' + fmtD(_s.used + _add) + '</b> 天，超過 ' + fmtD(_s.cap) + ' 天（未住院上限）。仍可送出，人事會再確認。</div>';
       }
     }
   }
@@ -2416,7 +2418,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v169';
+  if (dbg) dbg.textContent = 'v170';
   renderCalendar();
 }
 
@@ -3585,12 +3587,24 @@ async function computeQuotaStatus(empNo, subtype, startDate, eventId) {
       var used = rows.filter(function(x){ return x.leave_type === '休假' && x.leave_subtype === '特別休假'; })
         .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
       out.push({ label: (parseInt(y,10) - 1911) + ' 年特休', cap: cap, used: used, hard: r.hard_block });
+    } else if (r.scope === 'month') {
+      // v170：每月上限（生理假每月 1 日）
+      var ym = startDate.slice(0,7);
+      var mr = await sb.from('leave_requests').select('days').eq('emp_no', empNo).eq('leave_subtype', subtype)
+        .in('status',['approved','pending']).gte('start_date', ym + '-01').lte('start_date', ym + '-31');
+      var usedM = (mr.data||[]).reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+      out.push({ label: (parseInt(y,10) - 1911) + ' 年 ' + parseInt(startDate.slice(5,7),10) + ' 月' + subtype, cap: Number(r.quota_days), used: usedM, hard: r.hard_block, tip: '超過的部分請改請病假。' });
     } else if (r.scope === 'year') {
       var subs = r.count_group ? groupSubtypes(r.count_group) : [r.leave_subtype];
       var rows2 = await getYearRows();
       var used2 = rows2.filter(function(x){ return subs.indexOf(x.leave_subtype) >= 0; })
         .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
       var lbl = r.count_group ? (r.count_group.replace('組','') + (subs.length > 1 ? '（含' + subs.join('、') + '）' : '')) : r.leave_subtype;
+      if (r.count_group === '病假組') {  // v170：生理假第 4 天起併入病假
+        var menY = rows2.filter(function(x){ return x.leave_subtype === '生理假'; }).reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+        used2 += Math.max(0, menY - MENSTRUAL_FREE_DAYS);
+        if (menY > MENSTRUAL_FREE_DAYS) lbl += '（含生理假第 4 天起）';
+      }
       out.push({ label: (parseInt(y,10) - 1911) + ' 年' + lbl, cap: Number(r.quota_days), used: used2, hard: r.hard_block });
     } else if (r.scope === 'event') {
       if (!eventId) { out.push({ label: subtype, needEvent: true, hard: r.hard_block }); continue; }
@@ -3604,7 +3618,22 @@ async function computeQuotaStatus(empNo, subtype, startDate, eventId) {
       out.push({ label: subtype + '（本事件）', cap: cap3, used: used3, hard: r.hard_block });
     }
   }
+  // v170：請生理假時，一併顯示今年生理假與病假（第 4 天起併入病假）
+  if (subtype === '生理假') {
+    var yr3 = await getYearRows();
+    var menUsed = yr3.filter(function(x){ return x.leave_subtype === '生理假'; }).reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+    var sickUsed = yr3.filter(function(x){ return x.leave_subtype === '普通傷病假'; }).reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
+    var sickRule = (LEAVE_RULES||[]).filter(function(x){ return x.count_group === '病假組' && x.scope === 'year' && startDate >= x.effective_from && startDate <= x.effective_to; })[0];
+    out.push({ info: (parseInt(y,10) - 1911) + ' 年生理假已請 ' + fmtD(menUsed) + ' 天（前 ' + MENSTRUAL_FREE_DAYS + ' 天不併入病假，第 ' + (MENSTRUAL_FREE_DAYS + 1) + ' 天起併入病假）' });
+    if (sickRule) out.push({ label: (parseInt(y,10) - 1911) + ' 年病假（含生理假第 4 天起）', cap: Number(sickRule.quota_days),
+      used: sickUsed + Math.max(0, menUsed - MENSTRUAL_FREE_DAYS), hard: false, menUsed: menUsed });
+  }
   return out;
+}
+var MENSTRUAL_FREE_DAYS = 3;
+function quotaAdd(s, days) {  // 本次對該額度實際增加的天數
+  if (s.menUsed == null) return days;
+  return Math.max(0, s.menUsed + days - MENSTRUAL_FREE_DAYS) - Math.max(0, s.menUsed - MENSTRUAL_FREE_DAYS);
 }
 
 // ── 申請表單 ──
@@ -3709,6 +3738,7 @@ async function refreshQuotaUI(keepEvent) {
   if (!st.length) { info.style.display = 'none'; info.innerHTML = ''; return; }
   var warn = false;
   var lines = st.map(function(s){
+    if (s.info) return 'ℹ️ ' + escQ(s.info);
     if (s.missingQuota) { warn = true; return '📌 ' + s.roc + ' 年度特休天數尚未設定，要請 ' + s.roc + ' 年度的特休請洽人事'; }
     if (s.needEvent) { warn = true; return '📌 請「' + escQ(s.label) + '」需先選擇人事建立的事件紀錄'; }
     var remain = s.cap - s.used;
@@ -3809,6 +3839,15 @@ async function loadQuotaOverview() {
       _qovUsed[k] = (_qovUsed[k]||0) + (Number(r.days)||0);
     });
   });
+  // v170：生理假第 4 天起併入病假
+  var _men = {};
+  rows.forEach(function(r){ if (r.leave_subtype === '生理假') _men[r.emp_no] = (_men[r.emp_no]||0) + (Number(r.days)||0); });
+  if (_qovCols.some(function(c){ return c.key === '病假組'; })) {
+    Object.keys(_men).forEach(function(no){
+      var extra = Math.max(0, _men[no] - MENSTRUAL_FREE_DAYS);
+      if (extra > 0) _qovUsed[no + '|病假組'] = (_qovUsed[no + '|病假組']||0) + extra;
+    });
+  }
   var us = document.getElementById('qov-unit'), prev = us.value, units = [];
   _qovEmps.forEach(function(e){ if (e.unit_name && units.indexOf(e.unit_name) < 0) units.push(e.unit_name); });
   us.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+escQ(u)+'">'+escQ(u)+'</option>'; }).join('');
@@ -3831,7 +3870,7 @@ function renderQuotaOverview() {
   var groups = {}, order = [];
   emps.forEach(function(e){ var k = e.unit_name || '其他'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(e); });
   var w = Math.floor(75 / Math.max(_qovCols.length,1));
-  var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假超過只提醒。喪假依每位亡故親屬分開算，這裡只列今年已請天數；某筆喪假事件超過可請天數時標紅。</div>';
+  var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假含生理假第 4 天起，超過只提醒。喪假依每位亡故親屬分開算，這裡只列今年已請天數；某筆喪假事件超過可請天數時標紅。</div>';
   order.forEach(function(u){
     html += '<div style="margin-bottom:.6rem;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;">';
     html += '<div style="background:var(--primary);color:#fff;padding:10px 14px;font-weight:700;font-size:14px;">'+escQ(u)+'</div>';
