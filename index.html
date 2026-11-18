@@ -1573,7 +1573,8 @@ function updateSubtype() {
   const sub = document.getElementById('apply-subtype');
   var _prev = sub.value;
   var _male = (typeof applyEmpNo === 'function' && currentUser) ? isMaleEmp(applyEmpNo()) : false;
-  var _list = LEAVE_TYPES[type].filter(function(s){ return !(_male && FEMALE_ONLY_SUBS.indexOf(s) >= 0); });
+  var _indi = (typeof applyEmpNo === 'function' && currentUser) ? isIndigenousApplicant() : true;
+  var _list = LEAVE_TYPES[type].filter(function(s){ return !(_male && FEMALE_ONLY_SUBS.indexOf(s) >= 0) && !(s === INDIGENOUS_SUB && !_indi); });
   if (!_list.length) _list = LEAVE_TYPES[type];
   sub.innerHTML = _list.map(s=>`<option value="${s}">${s}</option>`).join('');
   if (_prev && _list.indexOf(_prev) >= 0) sub.value = _prev;
@@ -1582,6 +1583,14 @@ function updateSubtype() {
 // v171：員編第 4 碼 1＝男、2＝女；生理假、產假、產檢假限女性
 var FEMALE_ONLY_SUBS = ['生理假','產假','產檢假'];
 function isMaleEmp(empNo) { return !!empNo && String(empNo).charAt(3) === '1'; }
+// v172：原住民族歲時祭儀假限人事標記為原住民的同仁
+var INDIGENOUS_SUB = '原住民族歲時祭儀假';
+function isIndigenousApplicant() {
+  var no = applyEmpNo();
+  if (!currentUser || no === currentUser.emp_no) return !!(currentUser && currentUser.is_indigenous);
+  var e = _applyEmpCache[no];
+  return !!(e && e.is_indigenous);
+}
 
 // ── 代理人可用性檢查：代理人在申請期間若也請假（核准或審核中）→ 擋下改選 ──
 async function proxyLeaveConflict(proxyEmpNo, startDate, endDate) {
@@ -1640,6 +1649,9 @@ async function confirmLeave() {
   var _ovr = isQuotaOverride();
   if (FEMALE_ONLY_SUBS.indexOf(subtype) >= 0 && isMaleEmp(_applyEmpNo) && !_ovr) {
     errEl.textContent = subtype + '限女性同仁申請'; errEl.style.display='block'; return;
+  }
+  if (subtype === INDIGENOUS_SUB && !isIndigenousApplicant() && !_ovr) {
+    errEl.textContent = '原住民族歲時祭儀假限原住民同仁申請，如有需要請洽人事'; errEl.style.display='block'; return;
   }
   var _evInfo = collectEvInfo(subtype, startDate);
   if (_evInfo && _evInfo.error) { errEl.textContent = _evInfo.error; errEl.style.display='block'; return; }
@@ -2429,7 +2441,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v171';
+  if (dbg) dbg.textContent = 'v172';
   renderCalendar();
 }
 
@@ -3073,6 +3085,7 @@ function empMgmtItemHtml(e) {
       roleBtn('is_sub_manager', '副主管', '#fde8d8', '#9c4a00', 'var(--muted)') +
       roleBtn('is_hr', '人事', '#e8f4f0', '#1a5276', 'var(--muted)') +
       roleBtn('is_gm', '總經理', '#f3e5ff', '#6b21a8', 'var(--muted)') +
+      roleBtn('is_indigenous', '原住民', '#e6f6ee', '#1e7b4f', 'var(--muted)') +
       '<button data-empno="'+e.emp_no+'" onclick="resetPw(this)" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fafafa;color:var(--muted);cursor:pointer;font-size:11px;font-family:inherit;">重設密碼</button>' +
     '</div>' +
     '<div style="margin-top:.55rem;background:#f4f9f5;border:1px dashed var(--primary-light);border-radius:8px;padding:.5rem .6rem;">' +
@@ -3250,11 +3263,11 @@ async function toggleRole(btn) {
   var currentVal = btn.dataset.current === '1';
   var newVal = !currentVal;
   var emp = allMgmtEmps.find(function(e){ return e.emp_no===empNo; });
-  var roleNames = { is_manager:'主管', is_sub_manager:'副主管', is_hr:'人事', is_gm:'總經理' };
+  var roleNames = { is_manager:'主管', is_sub_manager:'副主管', is_hr:'人事', is_gm:'總經理', is_indigenous:'原住民（可請原住民族歲時祭儀假）' };
   var roleName = roleNames[field] || field;
   var msg = newVal
     ? '確定將 '+emp.name+' 設為「'+roleName+'」？'
-    : '確定取消 '+emp.name+' 的「'+roleName+'」權限？';
+    : '確定取消 '+emp.name+' 的「'+roleName+'」' + (field === 'is_indigenous' ? '標記？' : '權限？');
   if (!confirm(msg)) return;
   // 主管：先確認同單位是否已有主管
   // v158：管理部同單位可有多位主管，只有分社才自動取消原主管
@@ -3690,11 +3703,12 @@ async function initQuotaApply() {
     emps.map(function(e){ return '<option value="'+e.emp_no+'">'+escQ(e.unit_name)+'　'+escQ(e.name)+'</option>'; }).join('');
   refreshQuotaUI();
 }
-function onBehalfChanged() {
+async function onBehalfChanged() {
   // 換人時清掉代理人選擇，避免代理人是當事人本人
   document.getElementById('apply-proxy-name').value = '';
   proxyData = {};
   var pi = document.getElementById('proxy-info'); if (pi) { pi.textContent=''; pi.style.display='none'; }
+  if (applyEmpNo() !== currentUser.emp_no) await getApplyEmp();
   updateSubtype();
 }
 function resetQuotaApply() {
@@ -3956,7 +3970,7 @@ async function loadQuotaEvents() {
   renderQuotaEvents();
 }
 // 產假、陪產：超過舊制天數的部分＝新增天數，可向勞動部申請補助
-var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':7, '婚假':8 };
+var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':5, '產檢假':5, '婚假':8 };  // v172：陪產、產檢第 6 天起可申請補助
 function rocDate(d) { if (!d) return ''; var p = String(d).split('-'); return (parseInt(p[0],10)-1911) + '/' + parseInt(p[1],10) + '/' + parseInt(p[2],10); }
 var EVENT_TRACK_FROM = '2026-11-16';  // v162 上線日；之前的舊假單不列入待補建
 var _qevPending = [];
@@ -3990,7 +4004,7 @@ function renderQuotaEvents() {
       var cap = Number(e.quotas[sub]), used = _qevUsed[e.id + '|' + sub] || 0, remain = cap - used;
       var color = remain <= 0 ? 'color:#e74c3c;font-weight:700;' : (cap && used/cap >= 0.8) ? 'color:#e67e22;font-weight:600;' : '';
       var sub2 = '';
-      if (SUBSIDY_BASE[sub] && cap > SUBSIDY_BASE[sub]) {
+      if (SUBSIDY_BASE[sub] && cap > SUBSIDY_BASE[sub]) {  // 補助天數＝超過基準的已請天數
         var extra = Math.max(0, used - SUBSIDY_BASE[sub]);
         sub2 = '<div style="font-size:12px;color:#4F86C6;margin-left:1em;">其中新增天數（可申請補助）已請 ' + fmtD(extra) + ' 天</div>';
       }
