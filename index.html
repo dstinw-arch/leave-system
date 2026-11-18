@@ -378,7 +378,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       <div class="page-title">我的假期</div>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">可用特休（天）</div><div class="stat-val green" id="emp-remain">—</div></div>
-        <div class="stat-card"><div class="stat-label">已使用（天）</div><div class="stat-val orange" id="emp-used">—</div></div>
+        <div class="stat-card"><div class="stat-label">已使用（含審核中）</div><div class="stat-val orange" id="emp-used">—</div></div>
       </div>
       <div class="section-title" style="margin-top:.25rem;">我的假單紀錄</div>
       <div style="display:flex;gap:.5rem;margin-bottom:.6rem;">
@@ -1152,12 +1152,13 @@ async function loadEmpHome() {
   // 曆年制：只加總「今年」已核准的特休天數（以起始日年份認定），沒休完 12 月折算工資、不遞延
   var thisYear = new Date().getFullYear();
   var usedDays = myLeaveData
-    .filter(function(r){ return r.status === 'approved' && r.leave_type === '休假' && r.leave_subtype !== '原住民族歲時祭儀假' && new Date(r.start_date).getFullYear() === thisYear; })
+    .filter(function(r){ return (r.status === 'approved' || r.status === 'pending') && r.leave_type === '休假' && r.leave_subtype !== '原住民族歲時祭儀假' && new Date(r.start_date).getFullYear() === thisYear; })
     .reduce(function(sum, r){ return sum + (r.days||0); }, 0);
   var _q = await sb.from('annual_leave_quota').select('days').eq('emp_no', emp.emp_no).eq('year', thisYear).maybeSingle();
-  var quota = (_q.data && _q.data.days != null) ? parseFloat(_q.data.days) : (emp.annual_leave_days||0);
+  var _hasQuota = !!(_q.data && _q.data.days != null);
+  var quota = _hasQuota ? parseFloat(_q.data.days) : 0;
   var remain = quota - usedDays;
-  document.getElementById('emp-remain').textContent = remain.toFixed(1);
+  document.getElementById('emp-remain').textContent = _hasQuota ? remain.toFixed(1) : '未設定';
   document.getElementById('emp-used').textContent = usedDays.toFixed(1);
   filterEmpLeaves();
 }
@@ -1610,8 +1611,8 @@ async function confirmLeave() {
   var _wd = 0;
   for (var _dt=new Date(startDate+'T00:00:00'); _dt<=new Date(endDate+'T00:00:00'); _dt.setDate(_dt.getDate()+1)) { if (isWorkday(_dt)) _wd++; }
   if (_wd === 0) { errEl.textContent='所選日期都是假日，無需請假'; errEl.style.display='block'; return; }
-  if (type === '休假' && startDate.slice(0,4) !== endDate.slice(0,4)) {
-    errEl.textContent='特休以年度計算，跨年請分兩張申請（12/31 前一張、1/1 後一張）'; errEl.style.display='block'; return;
+  if (subtype !== '產假' && startDate.slice(0,4) !== endDate.slice(0,4)) {
+    errEl.textContent='假別天數以年度計算，跨年請分兩張申請（12/31 前一張、1/1 後一張）'; errEl.style.display='block'; return;
   }
   // v162：假別天數上限檢查
   var _applyEmpNo = applyEmpNo();
@@ -1626,6 +1627,10 @@ async function confirmLeave() {
   for (var _i = 0; _i < _qs.length; _i++) {
     var _s = _qs[_i];
     if (_s.needEvent) continue;  // v163：人事事後建立事件
+    if (_s.missingQuota) {
+      if (!_ovr) { errEl.textContent = _s.roc + ' 年度特休天數尚未設定，要請 ' + _s.roc + ' 年度的特休請洽人事。'; errEl.style.display='block'; return; }
+      continue;
+    }
     var _remain = _s.cap - _s.used;
     if (days > _remain) {
       if (_s.hard && QUOTA_ENFORCE && !_ovr) {
@@ -2394,7 +2399,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v167';
+  if (dbg) dbg.textContent = 'v168';
   renderCalendar();
 }
 
@@ -3556,8 +3561,8 @@ async function computeQuotaStatus(empNo, subtype, startDate, eventId) {
       var q = await sb.from('annual_leave_quota').select('days').eq('emp_no', empNo).eq('year', parseInt(y,10)).maybeSingle();
       var cap = (q.data && q.data.days != null) ? parseFloat(q.data.days) : null;
       if (cap === null) {
-        var e = await sb.from('employees').select('annual_leave_days').eq('emp_no', empNo).maybeSingle();
-        cap = (e.data && e.data.annual_leave_days) ? parseFloat(e.data.annual_leave_days) : 0;
+        out.push({ label: (parseInt(y,10) - 1911) + ' 年度特休', missingQuota: true, roc: parseInt(y,10) - 1911, hard: true });
+        continue;
       }
       var rows = await getYearRows();
       var used = rows.filter(function(x){ return x.leave_type === '休假' && x.leave_subtype === '特別休假'; })
@@ -3684,6 +3689,7 @@ async function refreshQuotaUI(keepEvent) {
   if (!st.length) { info.style.display = 'none'; info.innerHTML = ''; return; }
   var warn = false;
   var lines = st.map(function(s){
+    if (s.missingQuota) { warn = true; return '📌 ' + s.roc + ' 年度特休天數尚未設定，要請 ' + s.roc + ' 年度的特休請洽人事'; }
     if (s.needEvent) { warn = true; return '📌 請「' + escQ(s.label) + '」需先選擇人事建立的事件紀錄'; }
     var remain = s.cap - s.used;
     if (remain <= 0) warn = true;
@@ -3962,8 +3968,10 @@ async function toggleEventClosed(id) {
 }
 function defaultEventQuotas(kind, date, relation) {
   var q = {};
+  var refDate = date || todayYMD();
+  if (kind === '結婚' && date) refDate = defaultDeadline('結婚', date, false);  // 期限內遇到新制即適用新制天數
   (QUOTA_EVENT_KIND_SUBS[kind] || []).forEach(function(sub){
-    var r = rulesFor(sub, date || todayYMD()).filter(function(x){ return x.scope === 'event'; })[0];
+    var r = rulesFor(sub, refDate).filter(function(x){ return x.scope === 'event'; })[0];
     q[sub] = (r && r.quota_days != null) ? Number(r.quota_days) : '';
   });
   if (kind === '喪') {
