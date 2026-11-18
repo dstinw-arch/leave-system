@@ -417,6 +417,12 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <select id="apply-event" onchange="refreshQuotaUI(true)"></select>
         </div>
         <div id="apply-quota-info" style="display:none;margin:-4px 0 12px;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.7;"></div>
+        <div id="apply-evinfo" style="display:none;margin:0 0 12px;padding:10px 12px;border:1px solid #84B1ED;background:#f2f7fd;border-radius:8px;">
+          <div style="font-size:13px;color:#4F86C6;font-weight:600;margin-bottom:6px;" id="ei-title">事件資料（人事審核用）</div>
+          <div class="form-row"><label id="ei-date-label">亡故日期</label><input type="date" id="ei-date"></div>
+          <div class="form-row" id="ei-rel-row"><label>亡故親屬</label><select id="ei-rel"></select></div>
+          <div class="form-row" id="ei-spouse-row"><label>配偶姓名</label><input type="text" id="ei-spouse" placeholder="配偶姓名"></div>
+        </div>
         <div class="form-2col">
           <div class="form-row"><label>開始日期</label><input type="date" id="apply-start-date" onchange="syncEndDate();refreshQuotaUI()" /></div>
           <div class="form-row"><label>結束日期</label><input type="date" id="apply-end-date" onchange="calcDays()" /></div>
@@ -762,6 +768,13 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     <div id="p-review" class="page">
       <div class="page-title">證照審核</div>
       <div id="r-list"></div>
+      <div class="section-title" style="margin-top:1.4rem">核可紀錄（做薪水用）</div>
+      <div class="note">選月份，列出這個月核可的證照，以及每位同仁的證照津貼變化（上個月底 → 這個月底）。初始匯入的證照不列入。</div>
+      <div class="filter-bar" style="display:flex;gap:6px;">
+        <select id="rv-month" onchange="certRenderApprovedLog()" style="flex:1;"></select>
+        <button class="btn-sm" style="background:var(--primary);color:#fff;" onclick="certDownloadApprovedLog()">⬇ 下載</button>
+      </div>
+      <div id="rv-log"></div>
       <div class="section-title" style="margin-top:1.4rem">更正已核可證照</div>
       <div class="note">誤核可時可搜尋該同仁後更正該筆：「退回」會改為退回並 LINE 通知本人；「刪除」直接移除該筆、無法復原。</div>
       <div class="filter-bar"><input id="rv-kw" placeholder="輸入員編或姓名搜尋" oninput="certSearchApproved()"></div>
@@ -1617,6 +1630,8 @@ async function confirmLeave() {
   // v162：假別天數上限檢查
   var _applyEmpNo = applyEmpNo();
   var _ovr = isQuotaOverride();
+  var _evInfo = collectEvInfo(subtype, startDate);
+  if (_evInfo && _evInfo.error) { errEl.textContent = _evInfo.error; errEl.style.display='block'; return; }
   if (_ovr && !document.getElementById('apply-override-reason').value.trim()) {
     errEl.textContent='勾選略過天數上限時，請填寫略過原因'; errEl.style.display='block'; return;
   }
@@ -1706,7 +1721,8 @@ async function confirmLeave() {
     '<b>時間：</b>' + timeLabel + '<br>' +
     '<b>天數：</b>' + days + ' 天<br>' +
     '<b>事由：</b>' + reason + '<br>' +
-    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' + menstrualNote + quotaNote;
+    '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' +
+    (_evInfo ? '<br><b>事件資料：</b>' + escQ(evInfoText(subtype, _evInfo)) : '') + menstrualNote + quotaNote;
   document.getElementById('confirm-modal').style.display = 'flex';
 }
 
@@ -1772,7 +1788,8 @@ async function doSubmitLeave() {
     event_id: currentEventId(subtype, startDate),
     quota_override_by: isQuotaOverride() ? currentUser.emp_no : null,
     quota_override_reason: isQuotaOverride() ? document.getElementById('apply-override-reason').value.trim() : null,
-    quota_warning: _pendingQuotaWarning
+    quota_warning: _pendingQuotaWarning,
+    event_info: (function(){ var x = collectEvInfo(subtype, startDate); return (x && !x.error) ? x : null; })()
   };
   // 管理部假單：附上直屬長官員工編號
   if (reviewerType === 'mgmt' && emp.supervisor_emp_no) {
@@ -2041,7 +2058,7 @@ async function loadAnnualOverview() {
   if (!yearSel.options.length) {
     // 年度選單：近3年 + 今年 + 明年，方便年底跨年度核對
     var years = [thisYear+1, thisYear, thisYear-1, thisYear-2, thisYear-3];
-    yearSel.innerHTML = years.map(function(y){ return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+y+' 年</option>'; }).join('');
+    yearSel.innerHTML = years.map(function(y){ return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+(y-1911)+' 年</option>'; }).join('');
   }
   var selectedYear = parseInt(yearSel.value, 10) || thisYear;
   const empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,annual_leave_days,is_active').eq('is_active', true);
@@ -2399,7 +2416,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v168';
+  if (dbg) dbg.textContent = 'v169';
   renderCalendar();
 }
 
@@ -3567,14 +3584,14 @@ async function computeQuotaStatus(empNo, subtype, startDate, eventId) {
       var rows = await getYearRows();
       var used = rows.filter(function(x){ return x.leave_type === '休假' && x.leave_subtype === '特別休假'; })
         .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
-      out.push({ label: y + ' 年特休', cap: cap, used: used, hard: r.hard_block });
+      out.push({ label: (parseInt(y,10) - 1911) + ' 年特休', cap: cap, used: used, hard: r.hard_block });
     } else if (r.scope === 'year') {
       var subs = r.count_group ? groupSubtypes(r.count_group) : [r.leave_subtype];
       var rows2 = await getYearRows();
       var used2 = rows2.filter(function(x){ return subs.indexOf(x.leave_subtype) >= 0; })
         .reduce(function(s,x){ return s + (Number(x.days)||0); }, 0);
       var lbl = r.count_group ? (r.count_group.replace('組','') + (subs.length > 1 ? '（含' + subs.join('、') + '）' : '')) : r.leave_subtype;
-      out.push({ label: y + ' 年' + lbl, cap: Number(r.quota_days), used: used2, hard: r.hard_block });
+      out.push({ label: (parseInt(y,10) - 1911) + ' 年' + lbl, cap: Number(r.quota_days), used: used2, hard: r.hard_block });
     } else if (r.scope === 'event') {
       if (!eventId) { out.push({ label: subtype, needEvent: true, hard: r.hard_block }); continue; }
       var ev = await sb.from('leave_events').select('*').eq('id', eventId).maybeSingle();
@@ -3642,6 +3659,8 @@ function onBehalfChanged() {
 }
 function resetQuotaApply() {
   _pendingQuotaWarning = null;
+  ['ei-date','ei-spouse'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+  var er = document.getElementById('ei-rel'); if (er) er.value = '';
   var bo = document.getElementById('apply-onbehalf'); if (bo) bo.value = '';
   var cb = document.getElementById('apply-override'); if (cb) cb.checked = false;
   var rs = document.getElementById('apply-override-reason'); if (rs) { rs.value = ''; rs.style.display = 'none'; }
@@ -3683,6 +3702,7 @@ async function refreshQuotaUI(keepEvent) {
     evRow.style.display = 'none';
     evSel.innerHTML = '';
   }
+  updateEvInfoUI(subtype, start);
   var st = await computeQuotaStatus(empNo, subtype, start, currentEventId(subtype, start));
   if (token !== _quotaUiToken) return;
   st = st.filter(function(x){ return !x.needEvent; });
@@ -3742,7 +3762,7 @@ async function loadQuotaOverview() {
   var ys = document.getElementById('qov-year');
   if (!ys.options.length) {
     ys.innerHTML = [thisYear+1, thisYear, thisYear-1, thisYear-2].map(function(y){
-      return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+y+' 年</option>';
+      return '<option value="'+y+'"'+(y===thisYear?' selected':'')+'>'+(y-1911)+' 年</option>';
     }).join('');
   }
   var year = parseInt(ys.value, 10) || thisYear;
@@ -3879,7 +3899,7 @@ async function loadQuotaEvents() {
   }
   var evSubs = [];
   Object.keys(QUOTA_EVENT_KIND_SUBS).forEach(function(k){ evSubs = evSubs.concat(QUOTA_EVENT_KIND_SUBS[k]); });
-  var pr = await sb.from('leave_requests').select('id,emp_no,leave_subtype,start_date,days,status')
+  var pr = await sb.from('leave_requests').select('id,emp_no,leave_subtype,start_date,days,status,event_info')
     .is('event_id', null).in('status',['approved','pending']).in('leave_subtype', evSubs)
     .gte('created_at', EVENT_TRACK_FROM).order('start_date', { ascending: false }).limit(500);
   _qevPending = pr.data || [];
@@ -3903,12 +3923,13 @@ function renderQuotaEvents() {
     pendHtml = '<div class="qcard" style="border:1.5px solid #EE7785;background:#fdf0f1;">' +
       '<div style="font-weight:700;color:#c0392b;margin-bottom:4px;">📌 待補建事件（' + _qevPending.length + ' 筆假單）</div>' +
       '<div style="font-size:12px;color:#a33;margin-bottom:6px;">這些假單還沒對到事件，建立事件時勾選連結。</div>' +
-      _qevPending.map(function(r){
+      _qevPending.map(function(r, idx){
         var emp = _qevEmpMap[r.emp_no] || { name: r.emp_no, unit_name: '' };
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 0;border-top:1px dashed #f3c1c6;">' +
           '<div style="font-size:13px;"><b>' + escQ(emp.name) + '</b> <span style="color:var(--muted);font-size:12px;">' + escQ(emp.unit_name) + '</span><br>' +
-          escQ(r.leave_subtype) + '　' + String(r.start_date).replace(/-/g,'/') + '　' + fmtD(r.days) + ' 天' + (r.status === 'pending' ? '（審核中）' : '') + '</div>' +
-          '<button onclick="openEventForm(null,{emp:\'' + r.emp_no + '\',kind:\'' + subtypeKind(r.leave_subtype) + '\',date:\'' + r.start_date + '\'})" style="padding:5px 10px;border:none;background:#379392;color:#fff;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">建立事件</button>' +
+          escQ(r.leave_subtype) + '　' + String(r.start_date).replace(/-/g,'/') + '　' + fmtD(r.days) + ' 天' + (r.status === 'pending' ? '（審核中）' : '') +
+          (r.event_info ? '<br><span style="color:#4F86C6;">同仁填寫：' + escQ(evInfoText(r.leave_subtype, r.event_info)) + '</span>' : '') + '</div>' +
+          '<button onclick="openEventFromPending(' + idx + ')" style="padding:5px 10px;border:none;background:#379392;color:#fff;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">建立事件</button>' +
         '</div>';
       }).join('') + '</div>';
   }
@@ -3993,8 +4014,9 @@ async function loadEventLeaves() {
   var rows = (r.data||[]).filter(function(x){ return !x.event_id || (E && x.event_id === E.id); });
   if (!rows.length) { box.innerHTML = '<span style="color:var(--muted);">沒有可連結的假單</span>'; return; }
   box.innerHTML = rows.map(function(x){
-    var on = E && x.event_id === E.id;
-    return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" style="width:auto;" data-leave="' + x.id + '" data-was="' + (on?1:0) + '"' + (on?' checked':'') + '>' +
+    var on = (E && x.event_id === E.id) || (!E && _evPrefillLeave && x.id === _evPrefillLeave);
+    var was = E && x.event_id === E.id;
+    return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" style="width:auto;" data-leave="' + x.id + '" data-was="' + (was?1:0) + '"' + (on?' checked':'') + '>' +
       escQ(x.leave_subtype) + '　' + String(x.start_date).replace(/-/g,'/') + '　' + fmtD(x.days) + ' 天' + (x.status === 'pending' ? '（審核中）' : '') + '</label>';
   }).join('');
 }
@@ -4031,17 +4053,63 @@ async function openEventForm(id, prefill) {
   } else {
     document.getElementById('ev-detail').value = E ? (E.detail||'') : '';
   }
+  _evPrefillLeave = (!E && prefill && prefill.leaveId) ? prefill.leaveId : null;
   if (!E && prefill) {
     empSel.value = prefill.emp || '';
     if (prefill.kind) document.getElementById('ev-kind').value = prefill.kind;
     if (prefill.date) document.getElementById('ev-date').value = prefill.date;
+    if (prefill.rel) document.getElementById('ev-rel').value = prefill.rel;
+    if (prefill.detail) document.getElementById('ev-detail').value = prefill.detail;
   }
   evFormChanged(!E);
   if (E) { renderEventQuotaInputs(E.kind, E.quotas || {}); document.getElementById('ev-deadline').value = E.deadline || ''; }
   loadEventLeaves();
   document.getElementById('event-modal').style.display = 'flex';
 }
-function closeEventForm() { document.getElementById('event-modal').style.display = 'none'; }
+function closeEventForm() { document.getElementById('event-modal').style.display = 'none'; _evPrefillLeave = null; }
+var _evPrefillLeave = null;
+function openEventFromPending(idx) {
+  var r = _qevPending[idx]; if (!r) return;
+  var info = r.event_info || {};
+  openEventForm(null, { emp: r.emp_no, kind: subtypeKind(r.leave_subtype), date: info.date || r.start_date,
+    rel: info.relation || '', detail: info.spouse ? ('配偶 ' + info.spouse) : '', leaveId: r.id });
+}
+// v169：喪假／婚假申請時填事件資料
+var EVINFO_SUBS = { '喪假': '喪', '婚假': '結婚' };
+function updateEvInfoUI(subtype, start) {
+  var box = document.getElementById('apply-evinfo');
+  if (!box) return;
+  var need = EVINFO_SUBS[subtype] && !currentEventId(subtype, start);
+  box.style.display = need ? 'block' : 'none';
+  if (!need) return;
+  var isFun = subtype === '喪假';
+  document.getElementById('ei-title').textContent = isFun ? '喪假資料（人事審核用，必填）' : '婚假資料（人事審核用，必填）';
+  document.getElementById('ei-date-label').textContent = isFun ? '亡故日期' : '結婚登記日';
+  document.getElementById('ei-rel-row').style.display = isFun ? 'block' : 'none';
+  document.getElementById('ei-spouse-row').style.display = isFun ? 'none' : 'block';
+  var sel = document.getElementById('ei-rel');
+  if (isFun && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">請選擇</option>' + FUNERAL_DAYS.map(function(x){ return '<option value="'+x[0]+'">'+x[0]+'（'+x[1]+' 天）</option>'; }).join('');
+  }
+}
+function collectEvInfo(subtype, start) {
+  if (!EVINFO_SUBS[subtype] || currentEventId(subtype, start)) return null;
+  var d = document.getElementById('ei-date').value;
+  if (subtype === '喪假') {
+    var rel = document.getElementById('ei-rel').value;
+    if (!d || !rel) return { error: '請填寫亡故日期和亡故親屬' };
+    return { date: d, relation: rel };
+  }
+  var sp = document.getElementById('ei-spouse').value.trim();
+  if (!d || !sp) return { error: '請填寫結婚登記日和配偶姓名' };
+  return { date: d, spouse: sp };
+}
+function evInfoText(subtype, info) {
+  if (!info) return '';
+  var d = info.date ? String(info.date).replace(/-/g,'/') : '';
+  if (subtype === '喪假') return '亡故日期 ' + d + '，' + (info.relation || '');
+  return '結婚登記日 ' + d + '，配偶 ' + (info.spouse || '');
+}
 function addDaysYMD(d, n) { var t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() + n); return fmtDateYMD(t); }
 function addMonthsYMD(d, n) { var t = new Date(d + 'T00:00:00'); t.setMonth(t.getMonth() + n); return fmtDateYMD(t); }
 function defaultDeadline(kind, date, ext) {
@@ -4264,7 +4332,7 @@ async function ensureCertData(force){
   CERT_EMPS = (me.data||[]).map(function(e){ return {emp_no:e.emp_no,name:e.name,unit_id:e.unit_id,unit_name:e.unit_name,title:e.title||'',grade:e.job_grade,level:e.job_level,active:e.is_active!==false}; });
   CERT_EMP_BY_NO = {}; CERT_EMPS.forEach(function(e){ CERT_EMP_BY_NO[e.emp_no]=e; });
   var recs = await fetchAllRows('employee_certificates','*',null);
-  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason}; });
+  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason,applied_at:r.applied_at,reviewed_at:r.reviewed_at,reviewed_by:r.reviewed_by}; });
   var ul = await sb.from('employee_unpaid_leave').select('emp_no,kind,start_date,end_date');
   if(ul.error) console.error('unpaid leave load error:', ul.error);
   certBuildOnLeave(ul.data || []);
@@ -4273,13 +4341,14 @@ async function ensureCertData(force){
 }
 async function certReloadRecords(){
   var recs = await fetchAllRows('employee_certificates','*',null);
-  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason}; });
+  CERT_RECORDS = recs.map(function(r){ return {id:r.id,emp_no:r.emp_no,certificate_id:r.certificate_id,cert_no:r.cert_no,year:r.obtained_year,status:r.status,source:r.source,note:r.note,reject_reason:r.reject_reason,applied_at:r.applied_at,reviewed_at:r.reviewed_at,reviewed_by:r.reviewed_by}; });
 }
 
 // ── 津貼計算（比照預覽 calc）──
-function certCalc(empNo){
+function certCalc(empNo, asOf){
   var emp = CERT_EMP_BY_NO[empNo];
-  var recs = CERT_RECORDS.filter(function(r){ return r.emp_no===empNo && r.status==='approved'; });
+  // v169：asOf（ISO 時間）＝只算這個時間點以前核可的證照
+  var recs = CERT_RECORDS.filter(function(r){ return r.emp_no===empNo && r.status==='approved' && (!asOf || !r.reviewed_at || r.reviewed_at < asOf); });
   var owned = {}, certSet = {};
   recs.forEach(function(r){ var c=CERT_BY_ID[r.certificate_id]; if(!c)return; owned[c.id]=1; if(c.category==='證照') certSet[c.id]=1; });
   var size = {}; CERT_MASTER.forEach(function(c){ if(c.mgroup) size[c.mgroup]=(size[c.mgroup]||0)+1; });
@@ -4330,7 +4399,7 @@ function certGo(id, btn){
   CERT_PAGE=id;
   updateCertBadge();
   if(id==='p-mine') certRenderMine();
-  else if(id==='p-review'){ certRenderReview(); certSearchApproved(); }
+  else if(id==='p-review'){ certRenderReview(); certSearchApproved(); certInitLogMonths(); certRenderApprovedLog(); }
   else if(id==='p-stat') certRenderStat();
   else if(id==='p-check') certRenderCheck();
   else if(id==='p-hradd') certRenderHrAdd();
@@ -4416,6 +4485,74 @@ function certRenderReview(){
       +'<div class="cert-actions"><button class="btn-sm btn-approve" onclick="certOpenReview('+p.id+')">查證並審核</button></div></div>';
   }).join('') : '<div class="empty-hint">目前沒有待審核的證照登錄</div>';
 }
+// v169：核可紀錄（依月份）
+function certMonthRange(ym) {  // ym = 'YYYY-MM'（西元）；回傳當地時間月初、下月初的 ISO
+  var y = parseInt(ym.slice(0,4),10), m = parseInt(ym.slice(5,7),10);
+  return { from: new Date(y, m-1, 1).toISOString(), to: new Date(y, m, 1).toISOString() };
+}
+function certInitLogMonths() {
+  var sel = document.getElementById('rv-month'); if (!sel || sel.options.length) return;
+  var now = new Date(), opts = [];
+  for (var i = 0; i < 12; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var v = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    opts.push('<option value="'+v+'">'+(d.getFullYear()-1911)+' 年 '+(d.getMonth()+1)+' 月</option>');
+  }
+  sel.innerHTML = opts.join('');
+}
+function certLogData() {
+  var sel = document.getElementById('rv-month'); if (!sel || !sel.value) return null;
+  var rg = certMonthRange(sel.value);
+  var recs = CERT_RECORDS.filter(function(r){ return r.status === 'approved' && r.reviewed_at && r.reviewed_at >= rg.from && r.reviewed_at < rg.to && r.note !== '初始匯入'; })
+    .sort(function(a,b){ return a.reviewed_at < b.reviewed_at ? -1 : 1; });
+  var byEmp = {}, order = [];
+  recs.forEach(function(r){ if (!byEmp[r.emp_no]) { byEmp[r.emp_no] = []; order.push(r.emp_no); } byEmp[r.emp_no].push(r); });
+  return order.map(function(no){
+    var before = certCalc(no, rg.from), after = certCalc(no, rg.to);
+    var bAmt = Math.min(before.raw, CERT_CAP_TOTAL), aAmt = Math.min(after.raw, CERT_CAP_TOTAL);
+    return { emp_no: no, emp: CERT_EMP_BY_NO[no] || { name: no, unit_name: '', title: '' }, recs: byEmp[no], before: bAmt, after: aAmt, payable: after.payable };
+  });
+}
+function certFmtTime(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return (d.getFullYear()-1911) + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function certRenderApprovedLog() {
+  var box = document.getElementById('rv-log'); if (!box) return;
+  var data = certLogData();
+  if (!data || !data.length) { box.innerHTML = '<div class="empty-hint">這個月沒有核可的證照</div>'; return; }
+  var totalDiff = data.reduce(function(s,x){ return s + (x.after - x.before); }, 0);
+  box.innerHTML = '<div class="note">共 ' + data.length + ' 人，津貼合計增加 <b>' + totalDiff.toLocaleString() + ' 元</b>。</div>' +
+    data.map(function(x){
+      var diff = x.after - x.before;
+      return '<div class="cert-item approved"><div class="cert-head"><div class="cert-name">' + cEsc(maskName(x.emp.name)) + '（' + x.emp_no + '）' + cEsc(x.emp.unit_name) + '</div>' +
+        '<span class="badge ' + (diff > 0 ? 'badge-basic' : 'badge-none') + '">' + (diff > 0 ? '+' + diff : '不變') + '</span></div>' +
+        '<div class="cert-meta">' + x.recs.map(function(r){
+          var c = CERT_BY_ID[r.certificate_id] || { name: '?', tier: 'none' };
+          var rv = CERT_EMP_BY_NO[r.reviewed_by];
+          return cEsc(c.name) + '　' + certTierBadge(c.tier) + '<br>送出 ' + certFmtTime(r.source === 'self' ? r.applied_at : null) + '　核可 ' + certFmtTime(r.reviewed_at) + '　' + cEsc(rv ? rv.name : (r.reviewed_by || '')) + (r.source === 'hr' ? '（人資建檔）' : '');
+        }).join('<br>') +
+        '<br><b>證照津貼　' + x.before.toLocaleString() + ' → ' + x.after.toLocaleString() + ' 元</b>' + (diff > 0 ? '（+' + diff + '）' : '（不變，可能是合併計算未集滿或已達上限）') +
+        (x.payable ? '' : '<br><span style="color:var(--danger)">目前留停或離職，暫不計發</span>') + '</div></div>';
+    }).join('');
+}
+function certDownloadApprovedLog() {
+  var data = certLogData(); if (!data || !data.length) { cToast('這個月沒有核可的證照'); return; }
+  var ym = document.getElementById('rv-month').value;
+  var lines = [['員編','姓名','單位','證照','津貼級別','送出時間','核可時間','核可人','上月底津貼','本月底津貼','增加'].join(',')];
+  data.forEach(function(x){
+    x.recs.forEach(function(r, i){
+      var c = CERT_BY_ID[r.certificate_id] || { name: '?', tier: 'none' };
+      var rv = CERT_EMP_BY_NO[r.reviewed_by];
+      var row = [x.emp_no, x.emp.name, x.emp.unit_name, c.name, c.tier === 'basic' ? '基本300' : c.tier === 'other' ? '其他200' : '不計津貼',
+        certFmtTime(r.source === 'self' ? r.applied_at : null), certFmtTime(r.reviewed_at), rv ? rv.name : (r.reviewed_by || ''),
+        i === 0 ? x.before : '', i === 0 ? x.after : '', i === 0 ? (x.after - x.before) : ''];
+      lines.push(row.map(function(v){ v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }).join(','));
+    });
+  });
+  certDownloadCsv('證照核可紀錄_' + (parseInt(ym.slice(0,4),10)-1911) + '年' + parseInt(ym.slice(5,7),10) + '月.csv', lines.join('\r\n'));
+}
 function certOpenReview(id){
   CERT_CUR=id; var p=CERT_RECORDS.find(function(r){return r.id===id;}); if(!p)return;
   var e=CERT_EMP_BY_NO[p.emp_no]||{name:'?',unit_name:'',title:''}, c=CERT_BY_ID[p.certificate_id]||{name:'?'};
@@ -4436,7 +4573,7 @@ async function certDoReview(ok){
   var msg = ok ? '【證照核可】⭐證照已由人資核可⭐'
               : '【證照退回】你登錄的「'+c.name+'」（民國 '+p.year+' 年）未通過，原因：'+reason;
   notifyEmployee(p.emp_no, msg);
-  certCloseModal(); await certReloadRecords(); certRenderReview(); updateCertBadge();
+  certCloseModal(); await certReloadRecords(); certRenderReview(); certRenderApprovedLog(); updateCertBadge();
   cToast(ok?'已核可，LINE 已通知 '+e.name:'已退回，LINE 已通知 '+e.name);
 }
 
