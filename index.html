@@ -443,7 +443,17 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
             </select>
           </div>
         </div>
-        <div class="form-row">
+        <div id="ah-box" style="display:none;margin:0 0 12px;padding:10px 12px;border:1px solid #67D5B5;background:#eefaf6;border-radius:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;"><input type="checkbox" id="ah-on" onchange="ahToggle()"> 按小時請（家庭照顧假）</label>
+          <div id="ah-fields" style="display:none;margin-top:8px;">
+            <div class="form-2col">
+              <div class="form-row"><label>開始時間</label><select id="ah-start" onchange="ahSync()"></select></div>
+              <div class="form-row"><label>請假時數</label><select id="ah-hours" onchange="ahSync()"></select></div>
+            </div>
+            <div style="font-size:12px;color:#379392;">時數請填實際工作時數，午休不算。一天以 8 小時計。</div>
+          </div>
+        </div>
+        <div class="form-row" id="apply-days-row">
           <label>天數</label>
           <input type="number" id="apply-days" placeholder="例：1 或 0.5" step="0.5" min="0.5" />
         </div>
@@ -637,6 +647,14 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div class="form-row"><label id="ev-date-label">預產期／分娩日</label><input type="date" id="ev-date" onchange="evFormChanged(true)"></div>
         <div class="form-row" id="ev-rel-row" style="display:none;"><label>亡故親屬</label><select id="ev-rel" onchange="evFormChanged(true)"></select></div>
+        <div class="form-row" id="ev-preg-row" style="display:none;"><label>類型</label>
+          <select id="ev-preg" onchange="evFormChanged(true)">
+            <option value="分娩">分娩</option>
+            <option value="流產（妊娠3個月以上）">流產（妊娠 3 個月以上）</option>
+            <option value="流產（妊娠2個月以上未滿3個月）">流產（妊娠 2 個月以上未滿 3 個月）</option>
+            <option value="流產（妊娠未滿2個月）">流產（妊娠未滿 2 個月）</option>
+          </select>
+        </div>
         <div class="form-row"><label id="ev-detail-label">細節（選填）</label><input type="text" id="ev-detail" placeholder="例：流產（妊娠 3 個月以上）"></div>
         <div class="form-row"><label>可請天數（依日期自動帶入，可修改）</label><div id="ev-quotas"></div></div>
         <div class="form-row"><label id="ev-deadline-label">請假期限（依日期自動帶入，可修改；留空＝不限）</label>
@@ -906,9 +924,9 @@ const CERT_HR_EMP_NO = '1132004'; // 葉芷娟：證照登錄 LINE 通知固定�
 let CERT_MODULE = 'leave';
 
 const LEAVE_TYPES = {
-  '休假': ['特別休假','原住民族歲時祭儀假','防疫隔離假','防疫照顧假','疫苗接種假'],
-  '病假': ['普通傷病假','疫苗接種假','生理假'],
-  '事假': ['普通事假','防疫隔離假','防疫照顧假','家庭照顧假'],
+  '休假': ['特別休假','原住民族歲時祭儀假'],
+  '病假': ['普通傷病假','生理假'],
+  '事假': ['普通事假','家庭照顧假'],
   '其他假': ['婚假','喪假','產假','產檢假','陪產檢及陪產假','公假','公傷病假_普通傷病假','公傷病假_因公確診','出差']
 };
 
@@ -1056,6 +1074,7 @@ const DIRECT_TO_GM = ['1001001']; // 直送總經理（法遵主管許庭豪）
 // 半天判斷：回傳 '上午' / '下午' / ''（整天）
 // 半天標示：單日回「上午/下午」；多天回「6/26 下午起」或「至 7/1 上午」
 function halfPeriodDetail(startDate, endDate, days, startTime, endTime) {
+  if (((Number(days)||0) * 2) % 1 !== 0) return '';      // v173：按小時請，不標上午下午
   if (((Number(days)||0) * 2) % 2 === 0) return '';      // 整數天，非半天
   var sh = parseInt(String(startTime||'').split(':')[0], 10);
   var eh = parseInt(String(endTime||'').split(':')[0], 10);
@@ -1066,8 +1085,68 @@ function halfPeriodDetail(startDate, endDate, days, startTime, endTime) {
   return '';
 }
 function daysText(r) {
+  if (((Number(r.days)||0) * 2) % 1 !== 0) return hoursText(r.days) + (r.start_time ? '（' + String(r.start_time).slice(0,5) + ' 起）' : '');
   var p = halfPeriodDetail(r.start_date, r.end_date, r.days, r.start_time, r.end_time);
   return r.days + ' 天' + (p ? '（' + p + '）' : '');
+}
+function hoursText(days) { return (Math.round((Number(days)||0) * 8 * 10) / 10) + ' 小時'; }
+// v173：家庭照顧假按小時請
+function ahActive() {
+  var box = document.getElementById('ah-box'), cb = document.getElementById('ah-on');
+  return !!(box && box.style.display !== 'none' && cb && cb.checked);
+}
+function ahInit() {
+  var st = document.getElementById('ah-start'), hr = document.getElementById('ah-hours');
+  if (st.options.length) return;
+  var starts = ['08:40','09:40','10:40','11:40','12:40','13:40','14:40','15:40','16:40'];
+  st.innerHTML = starts.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join('');
+  hr.innerHTML = [1,2,3,4,5,6,7,8].map(function(h){ return '<option value="'+h+'">'+h+' 小時</option>'; }).join('');
+}
+function ahUpdateUI(subtype) {
+  var box = document.getElementById('ah-box'); if (!box) return;
+  var show = subtype === '家庭照顧假';
+  box.style.display = show ? 'block' : 'none';
+  if (!show) { document.getElementById('ah-on').checked = false; }
+  ahToggle(true);
+}
+function ahToggle(silent) {
+  var on = ahActive();
+  ahInit();
+  document.getElementById('ah-fields').style.display = on ? 'block' : 'none';
+  document.getElementById('apply-days-row').style.display = on ? 'none' : 'block';
+  var tr = document.getElementById('apply-start-time').closest('.form-2col');
+  if (tr) tr.style.display = on ? 'none' : '';
+  var ed = document.getElementById('apply-end-date'); if (ed) ed.disabled = on;
+  if (on) ahSync();
+  else {
+    ['apply-start-time','apply-end-time'].forEach(function(id){
+      var sel = document.getElementById(id);
+      [].slice.call(sel.querySelectorAll('option[data-ah]')).forEach(function(o){ o.remove(); });
+    });
+    var _st = document.getElementById('apply-start-time'), _et = document.getElementById('apply-end-time');
+    if (![].some.call(_st.options, function(o){ return o.value === _st.value; }) || !_st.value) _st.value = '08:40';
+    if (![].some.call(_et.options, function(o){ return o.value === _et.value; }) || !_et.value) _et.value = '17:40';
+    if (!silent) calcDays();
+  }
+}
+function ahSetOpt(sel, val) {
+  if (![].some.call(sel.options, function(o){ return o.value === val; })) {
+    var o = document.createElement('option'); o.value = val; o.textContent = val; o.setAttribute('data-ah','1'); sel.appendChild(o);
+  }
+  sel.value = val;
+}
+function ahSync() {
+  if (!ahActive()) return;
+  var sd = document.getElementById('apply-start-date').value;
+  if (sd) document.getElementById('apply-end-date').value = sd;
+  var st = document.getElementById('ah-start').value || '08:40';
+  var h = parseInt(document.getElementById('ah-hours').value, 10) || 1;
+  var p = st.split(':'), mins = parseInt(p[0],10) * 60 + parseInt(p[1],10) + h * 60;
+  if (mins > 17 * 60 + 40) mins = 17 * 60 + 40;
+  var et = String(Math.floor(mins / 60)).padStart(2,'0') + ':' + String(mins % 60).padStart(2,'0');
+  ahSetOpt(document.getElementById('apply-start-time'), st);
+  ahSetOpt(document.getElementById('apply-end-time'), et);
+  document.getElementById('apply-days').value = String(h / 8);
 }
 
 function getReviewerType(emp) {
@@ -1619,6 +1698,7 @@ function proxyConflictMsg(proxyName, rows) {
 async function confirmLeave() {
   const errEl = document.getElementById('apply-error');
   errEl.style.display = 'none';
+  if (ahActive()) ahSync();
   const type = document.getElementById('apply-type').value;
   const subtype = document.getElementById('apply-subtype').value;
   const startDate = document.getElementById('apply-start-date').value;
@@ -1629,6 +1709,9 @@ async function confirmLeave() {
   const reason = document.getElementById('apply-reason').value.trim();
   const proxyName = normName(document.getElementById('apply-proxy-name').value);
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
+  if ((days * 2) % 1 !== 0 && subtype !== '家庭照顧假') {
+    errEl.textContent='只有家庭照顧假可以按小時請，其他假別請以半天為單位'; errEl.style.display='block'; return;
+  }
   if (!startDate||!endDate||isNaN(days)||days<=0||!reason||!proxyName||!proxyDuty) {
     errEl.textContent='請填寫所有必要欄位（含代理人姓名與擔任事務）';
     errEl.style.display='block'; return;
@@ -1837,7 +1920,7 @@ async function doSubmitLeave() {
   function _md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
   var leaveMsg = '[請假通知]📣 有一筆假單待審核（請開啟系統查看）\n' +
     '期間：' + _md(startDate) + (days > 0.5 ? ' ~ ' + _md(endDate) : '') +
-    '　天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '') +
+    '　' + ((days * 2) % 1 !== 0 ? '時數：' + hoursText(days) + '（' + startTime + ' 起）' : '天數：' + days + ' 天' + (_p ? '（' + _p + '）' : '')) +
     (_pendingQuotaWarning ? '\n⚠️ ' + _pendingQuotaWarning : '');
   await notifyManager(emp, leaveMsg);
   await notifyProxy(insertData);
@@ -2219,6 +2302,7 @@ function holidayLabel(ds) {
 }
 
 function calcDays() {
+  if (ahActive()) { ahSync(); return; }
   var s = document.getElementById('apply-start-date').value;
   var e = document.getElementById('apply-end-date').value;
   if (!s || !e) return;
@@ -2441,7 +2525,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v172';
+  if (dbg) dbg.textContent = 'v173';
   renderCalendar();
 }
 
@@ -3713,6 +3797,7 @@ async function onBehalfChanged() {
 }
 function resetQuotaApply() {
   _pendingQuotaWarning = null;
+  var _ah = document.getElementById('ah-on'); if (_ah && _ah.checked) { _ah.checked = false; ahToggle(true); }
   ['ei-date','ei-spouse'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
   var er = document.getElementById('ei-rel'); if (er) er.value = '';
   var bo = document.getElementById('apply-onbehalf'); if (bo) bo.value = '';
@@ -3757,6 +3842,7 @@ async function refreshQuotaUI(keepEvent) {
     evSel.innerHTML = '';
   }
   updateEvInfoUI(subtype, start);
+  ahUpdateUI(subtype);
   var st = await computeQuotaStatus(empNo, subtype, start, currentEventId(subtype, start));
   if (token !== _quotaUiToken) return;
   st = st.filter(function(x){ return !x.needEvent; });
@@ -3768,8 +3854,9 @@ async function refreshQuotaUI(keepEvent) {
     if (s.needEvent) { warn = true; return '📌 請「' + escQ(s.label) + '」需先選擇人事建立的事件紀錄'; }
     var remain = s.cap - s.used;
     if (remain <= 0) warn = true;
-    return (remain <= 0 ? '⛔ ' : '📊 ') + escQ(s.label) + '：上限 ' + fmtD(s.cap) + ' 天，已請 ' + fmtD(s.used) +
-      ' 天（含審核中），<b>剩餘 ' + fmtD(Math.max(remain,0)) + ' 天</b>' + (s.hard ? '' : '（超過只提醒）');
+    var hh = /家庭照顧假/.test(s.label) && !/事假/.test(s.label);
+    return (remain <= 0 ? '⛔ ' : '📊 ') + escQ(s.label) + '：上限 ' + fmtD(s.cap) + ' 天' + (hh ? '（' + hoursText(s.cap) + '）' : '') + '，已請 ' + fmtD(s.used) +
+      ' 天（含審核中），<b>剩餘 ' + fmtD(Math.max(remain,0)) + ' 天' + (hh ? '（' + hoursText(Math.max(remain,0)) + '）' : '') + '</b>' + (s.hard ? '' : '（超過只提醒）');
   });
   info.innerHTML = lines.join('<br>');
   info.style.background = warn ? '#fdf0f1' : '#eef8f6';
@@ -4051,7 +4138,13 @@ async function toggleEventClosed(id) {
   if (r.error || !r.data || r.data.length !== 1) { alert('更新失敗：' + (r.error ? r.error.message : '沒有權限')); return; }
   loadQuotaEvents();
 }
-function defaultEventQuotas(kind, date, relation) {
+// v173：流產假天數（新制 116 年起：未滿 2 個月 10 日、2～3 個月 2 週；3 個月以上維持 4 週）
+var MISCARRIAGE_DAYS = {
+  '流產（妊娠3個月以上）':        { old: 28, nw: 28 },
+  '流產（妊娠2個月以上未滿3個月）': { old: 7,  nw: 14 },
+  '流產（妊娠未滿2個月）':        { old: 5,  nw: 10 }
+};
+function defaultEventQuotas(kind, date, relation, preg) {
   var q = {};
   var refDate = date || todayYMD();
   if (kind === '結婚' && date) refDate = defaultDeadline('結婚', date, false);  // 期限內遇到新制即適用新制天數
@@ -4062,6 +4155,10 @@ function defaultEventQuotas(kind, date, relation) {
   if (kind === '喪') {
     var f = FUNERAL_DAYS.filter(function(x){ return x[0] === relation; })[0];
     q['喪假'] = f ? f[1] : '';
+  }
+  if (kind === '孕產' && preg && MISCARRIAGE_DAYS[preg]) {
+    var nd = newRuleDate();
+    q['產假'] = (nd && (date || todayYMD()) >= nd) ? MISCARRIAGE_DAYS[preg].nw : MISCARRIAGE_DAYS[preg].old;
   }
   return q;
 }
@@ -4115,7 +4212,11 @@ async function openEventForm(id, prefill) {
     document.getElementById('ev-rel').value = FUNERAL_DAYS.some(function(x){ return x[0] === E.detail; }) ? E.detail : '';
     document.getElementById('ev-detail').value = '';
   } else {
-    document.getElementById('ev-detail').value = E ? (E.detail||'') : '';
+    var _d = E ? (E.detail||'') : '';
+    var _pgSel = document.getElementById('ev-preg');
+    _pgSel.value = '分娩';
+    Object.keys(MISCARRIAGE_DAYS).forEach(function(k){ if (_d.indexOf(k) === 0) { _pgSel.value = k; _d = _d.slice(k.length).replace(/^；/, ''); } });
+    document.getElementById('ev-detail').value = _d;
   }
   _evPrefillLeave = (!E && prefill && prefill.leaveId) ? prefill.leaveId : null;
   if (!E && prefill) {
@@ -4179,6 +4280,7 @@ function addMonthsYMD(d, n) { var t = new Date(d + 'T00:00:00'); t.setMonth(t.ge
 function defaultDeadline(kind, date, ext) {
   if (!date) return '';
   if (kind === '喪') return addDaysYMD(date, 99);                       // 亡故日起百日（亡故日算第 1 天）
+  if (kind === '配偶孕產') return addDaysYMD(date, 14);                  // v173：配偶分娩日前後合計 15 日內
   if (kind === '結婚') return ext ? addDaysYMD(addMonthsYMD(date, 12), -1) // 經雇主同意：1 年內
                                   : addDaysYMD(addMonthsYMD(addDaysYMD(date, -10), 3), -1); // 登記日前 10 日起 3 個月
   return '';
@@ -4194,11 +4296,14 @@ function evFormChanged(refill) {
   var isFun = kind === '喪';
   document.getElementById('ev-rel-row').style.display = isFun ? 'block' : 'none';
   document.getElementById('ev-detail').parentElement.style.display = isFun ? 'none' : 'block';
+  document.getElementById('ev-preg-row').style.display = kind === '孕產' ? 'block' : 'none';
+  var _preg = kind === '孕產' ? document.getElementById('ev-preg').value : '';
   document.getElementById('ev-date-label').textContent =
-    kind === '孕產' || kind === '配偶孕產' ? '預產期／分娩日' : kind === '結婚' ? '結婚登記日' : '亡故日期';
+    kind === '孕產' ? (_preg.indexOf('流產') === 0 ? '流產日' : '預產期／分娩日')
+    : kind === '配偶孕產' ? '配偶分娩日（還沒生先填預產期）' : kind === '結婚' ? '結婚登記日' : '亡故日期';
   document.getElementById('ev-detail').placeholder =
-    kind === '孕產' ? '例：流產（妊娠 3 個月以上）' : kind === '結婚' ? '' : '';
-  if (refill) renderEventQuotaInputs(kind, defaultEventQuotas(kind, document.getElementById('ev-date').value, document.getElementById('ev-rel').value));
+    kind === '孕產' ? '其他說明（選填）' : kind === '配偶孕產' ? '例：配偶姓名' : '';
+  if (refill) renderEventQuotaInputs(kind, defaultEventQuotas(kind, document.getElementById('ev-date').value, document.getElementById('ev-rel').value, _preg));
   if (refill && document.getElementById('event-modal').style.display === 'flex') loadEventLeaves();
 }
 function renderEventQuotaInputs(kind, q) {
@@ -4215,6 +4320,10 @@ async function saveEvent() {
   var kind = document.getElementById('ev-kind').value;
   var date = document.getElementById('ev-date').value;
   var detail = kind === '喪' ? document.getElementById('ev-rel').value : document.getElementById('ev-detail').value.trim();
+  if (kind === '孕產') {
+    var _pg = document.getElementById('ev-preg').value;
+    if (_pg !== '分娩') detail = _pg + (detail ? '；' + detail : '');
+  }
   var note = document.getElementById('ev-note').value.trim();
   var deadline = document.getElementById('ev-deadline').value || null;
   if (!emp) { err.textContent = '請選擇同仁'; err.style.display = 'block'; return; }
