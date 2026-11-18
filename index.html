@@ -633,6 +633,10 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         <div class="form-row" id="ev-rel-row" style="display:none;"><label>亡故親屬</label><select id="ev-rel" onchange="evFormChanged(true)"></select></div>
         <div class="form-row"><label id="ev-detail-label">細節（選填）</label><input type="text" id="ev-detail" placeholder="例：流產（妊娠 3 個月以上）"></div>
         <div class="form-row"><label>可請天數（依日期自動帶入，可修改）</label><div id="ev-quotas"></div></div>
+        <div class="form-row"><label id="ev-deadline-label">請假期限（依日期自動帶入，可修改；留空＝不限）</label>
+          <input type="date" id="ev-deadline">
+          <label id="ev-ext-row" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="ev-ext" onchange="evDeadlineAuto()"> 經雇主同意延長至 1 年內請完</label>
+        </div>
         <div class="form-row"><label>備註（選填）</label><input type="text" id="ev-note"></div>
         <div class="form-row"><label>連結假單（勾選屬於這次事件的假單）</label><div id="ev-leaves" style="font-size:13px;line-height:1.8;"></div></div>
         <div id="ev-error" class="error-msg"></div>
@@ -2390,7 +2394,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v166';
+  if (dbg) dbg.textContent = 'v167';
   renderCalendar();
 }
 
@@ -3658,7 +3662,7 @@ async function refreshQuotaUI(keepEvent) {
       var er = await sb.from('leave_events').select('*').eq('emp_no', empNo)
         .eq('kind', evRule.event_kind).eq('is_closed', false).order('event_date', { ascending: false });
       if (token !== _quotaUiToken) return;
-      var evs = (er.data||[]).filter(function(e){ return e.quotas && e.quotas[subtype] != null; });
+      var evs = (er.data||[]).filter(function(e){ return e.quotas && e.quotas[subtype] != null && (!e.deadline || start <= e.deadline); });
       if (!evs.length) {
         evSel.innerHTML = '';
         evRow.style.display = 'none';
@@ -3876,7 +3880,8 @@ async function loadQuotaEvents() {
   renderQuotaEvents();
 }
 // 產假、陪產：超過舊制天數的部分＝新增天數，可向勞動部申請補助
-var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':7 };
+var SUBSIDY_BASE = { '產假':56, '陪產檢及陪產假':7, '婚假':8 };
+function rocDate(d) { if (!d) return ''; var p = String(d).split('-'); return (parseInt(p[0],10)-1911) + '/' + parseInt(p[1],10) + '/' + parseInt(p[2],10); }
 var EVENT_TRACK_FROM = '2026-11-16';  // v162 上線日；之前的舊假單不列入待補建
 var _qevPending = [];
 function subtypeKind(sub) {
@@ -3925,6 +3930,12 @@ function renderQuotaEvents() {
         '</div>' +
       '</div>' +
       '<div style="font-size:13px;color:var(--muted);">' + String(e.event_date).replace(/-/g,'/') + (e.detail ? '　' + escQ(e.detail) : '') + (e.note ? '　｜' + escQ(e.note) : '') + '</div>' +
+      (e.deadline ? (function(){
+        var expired = todayYMD() > e.deadline;
+        var left = Object.keys(e.quotas || {}).reduce(function(s, sub){ return s + Math.max(0, Number(e.quotas[sub]) - (_qevUsed[e.id + '|' + sub] || 0)); }, 0);
+        return '<div style="font-size:13px;' + (expired && left > 0 ? 'color:#c0392b;font-weight:600;' : 'color:#379392;') + '">⏰ 期限至 ' + rocDate(e.deadline) +
+          (expired ? (left > 0 ? '（已逾期，剩 ' + fmtD(left) + ' 天不能再請）' : '（已逾期）') : '') + '</div>';
+      })() : '') +
       lines +
     '</div>';
   }).join('');
@@ -4005,6 +4016,7 @@ async function openEventForm(id, prefill) {
   document.getElementById('ev-kind').disabled = !!E;
   document.getElementById('ev-date').value = E ? E.event_date : '';
   document.getElementById('ev-note').value = E ? (E.note||'') : '';
+  document.getElementById('ev-ext').checked = false;
   if (E && E.kind === '喪') {
     document.getElementById('ev-rel').value = FUNERAL_DAYS.some(function(x){ return x[0] === E.detail; }) ? E.detail : '';
     document.getElementById('ev-detail').value = '';
@@ -4017,13 +4029,28 @@ async function openEventForm(id, prefill) {
     if (prefill.date) document.getElementById('ev-date').value = prefill.date;
   }
   evFormChanged(!E);
-  if (E) renderEventQuotaInputs(E.kind, E.quotas || {});
+  if (E) { renderEventQuotaInputs(E.kind, E.quotas || {}); document.getElementById('ev-deadline').value = E.deadline || ''; }
   loadEventLeaves();
   document.getElementById('event-modal').style.display = 'flex';
 }
 function closeEventForm() { document.getElementById('event-modal').style.display = 'none'; }
+function addDaysYMD(d, n) { var t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() + n); return fmtDateYMD(t); }
+function addMonthsYMD(d, n) { var t = new Date(d + 'T00:00:00'); t.setMonth(t.getMonth() + n); return fmtDateYMD(t); }
+function defaultDeadline(kind, date, ext) {
+  if (!date) return '';
+  if (kind === '喪') return addDaysYMD(date, 99);                       // 亡故日起百日（亡故日算第 1 天）
+  if (kind === '結婚') return ext ? addDaysYMD(addMonthsYMD(date, 12), -1) // 經雇主同意：1 年內
+                                  : addDaysYMD(addMonthsYMD(addDaysYMD(date, -10), 3), -1); // 登記日前 10 日起 3 個月
+  return '';
+}
+function evDeadlineAuto() {
+  document.getElementById('ev-deadline').value = defaultDeadline(document.getElementById('ev-kind').value,
+    document.getElementById('ev-date').value, document.getElementById('ev-ext').checked);
+}
 function evFormChanged(refill) {
   var kind = document.getElementById('ev-kind').value;
+  document.getElementById('ev-ext-row').style.display = kind === '結婚' ? 'flex' : 'none';
+  if (refill) evDeadlineAuto();
   var isFun = kind === '喪';
   document.getElementById('ev-rel-row').style.display = isFun ? 'block' : 'none';
   document.getElementById('ev-detail').parentElement.style.display = isFun ? 'none' : 'block';
@@ -4049,6 +4076,7 @@ async function saveEvent() {
   var date = document.getElementById('ev-date').value;
   var detail = kind === '喪' ? document.getElementById('ev-rel').value : document.getElementById('ev-detail').value.trim();
   var note = document.getElementById('ev-note').value.trim();
+  var deadline = document.getElementById('ev-deadline').value || null;
   if (!emp) { err.textContent = '請選擇同仁'; err.style.display = 'block'; return; }
   if (!date) { err.textContent = '請填日期'; err.style.display = 'block'; return; }
   if (kind === '喪' && !detail) { err.textContent = '請選擇亡故親屬'; err.style.display = 'block'; return; }
@@ -4060,9 +4088,9 @@ async function saveEvent() {
   if (bad) { err.textContent = '請填寫每個假別的可請天數'; err.style.display = 'block'; return; }
   var res;
   if (E) {
-    res = await sb.from('leave_events').update({ event_date: date, detail: detail || null, quotas: quotas, note: note || null }).eq('id', E.id).select();
+    res = await sb.from('leave_events').update({ event_date: date, detail: detail || null, quotas: quotas, note: note || null, deadline: deadline }).eq('id', E.id).select();
   } else {
-    res = await sb.from('leave_events').insert({ emp_no: emp, kind: kind, event_date: date, detail: detail || null, quotas: quotas, note: note || null, created_by: currentUser.emp_no }).select();
+    res = await sb.from('leave_events').insert({ emp_no: emp, kind: kind, event_date: date, detail: detail || null, quotas: quotas, note: note || null, deadline: deadline, created_by: currentUser.emp_no }).select();
   }
   if (res.error || !res.data || res.data.length !== 1) { err.textContent = '儲存失敗：' + (res.error ? res.error.message : '沒有權限'); err.style.display = 'block'; return; }
   var link = [], unlink = [];
@@ -4080,9 +4108,10 @@ async function saveEvent() {
 }
 
 // 設定：新制生效日、檢查開關
+var GEW_SUBS = ['產假','產檢假','陪產檢及陪產假'];  // v167：只管性平法修正的三種假
 function newRuleDate() {
   var d = null;
-  (LEAVE_RULES||[]).forEach(function(r){ if (r.effective_from > '1900-01-01' && (!d || r.effective_from < d)) d = r.effective_from; });
+  (LEAVE_RULES||[]).forEach(function(r){ if (GEW_SUBS.indexOf(r.leave_subtype) >= 0 && r.effective_from > '1900-01-01' && (!d || r.effective_from < d)) d = r.effective_from; });
   return d;
 }
 async function renderQuotaSettings() {
@@ -4113,8 +4142,8 @@ async function saveNewRuleDate() {
   if (!confirm('確定把新制生效日從 ' + od.replace(/-/g,'/') + ' 改成 ' + nd.replace(/-/g,'/') + '？')) return;
   var prevOld = fmtDateYMD(new Date(new Date(od + 'T00:00:00').getTime() - 86400000));
   var prevNew = fmtDateYMD(new Date(new Date(nd + 'T00:00:00').getTime() - 86400000));
-  var a = await sb.from('leave_rules').update({ effective_from: nd }).eq('effective_from', od).select();
-  var b = await sb.from('leave_rules').update({ effective_to: prevNew }).eq('effective_to', prevOld).select();
+  var a = await sb.from('leave_rules').update({ effective_from: nd }).eq('effective_from', od).in('leave_subtype', GEW_SUBS).select();
+  var b = await sb.from('leave_rules').update({ effective_to: prevNew }).eq('effective_to', prevOld).in('leave_subtype', GEW_SUBS).select();
   if (a.error || b.error || !a.data.length || !b.data.length) {
     alert('儲存失敗：' + ((a.error||b.error||{}).message || '沒有權限')); renderQuotaSettings(); return;
   }
