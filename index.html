@@ -1073,6 +1073,8 @@ function showPage(id, btn) {
 // 其他員工 → 所屬單位主管審核
 // 直接對理事主席的人員：總經理蔡景偉 + 副總/總稽核邱煥宸
 const DIRECT_TO_CHAIRMAN = ['0891009']; // 直送理事主席的副總（總稽核邱煥宸）
+// v179：直送主席的假單送出時，另外通知這兩位人事協助處理（主席沒用系統）
+const CHAIRMAN_ASSIST_NOTIFY = ['1132004', '1112009'];
 const DIRECT_TO_GM = ['1001001']; // 直送總經理（法遵主管許庭豪）
 
 // 半天判斷：回傳 '上午' / '下午' / ''（整天）
@@ -1215,6 +1217,20 @@ async function notifyEmployee(empNo, message) {
   var res = await sb.from('employees').select('line_user_id').eq('emp_no', empNo).single();
   if (res.data && res.data.line_user_id) {
     await sendLineNotify(res.data.line_user_id, message);
+  }
+}
+
+// v179：直送主席的假單（邱副總）→ 通知人事協辦；文字含蓄、不寫姓名，與一般通知不同
+async function notifyChairmanAssist(r) {
+  if (!DIRECT_TO_CHAIRMAN.includes(r.emp_no)) return;
+  function md(ds){ var p = String(ds).split('-'); return parseInt(p[1],10) + '/' + parseInt(p[2],10); }
+  var period = (r.start_date === r.end_date) ? md(r.start_date) : (md(r.start_date) + '～' + md(r.end_date));
+  var msg = '[人事協辦] 🗂 有一筆申請需要您協助處理\n' +
+    '日期：' + period + '　' + daysText(r) + '\n' +
+    '請開啟系統「全員假單」查看';
+  for (var no of CHAIRMAN_ASSIST_NOTIFY) {
+    if (currentUser && no === currentUser.emp_no) continue; // 自己代為登錄的不用通知自己
+    try { await notifyEmployee(no, msg); } catch(e) { console.warn('人事協辦通知失敗', no, e); }
   }
 }
 
@@ -1934,6 +1950,7 @@ async function doSubmitLeave() {
     (_pendingQuotaWarning ? '\n⚠️ ' + _pendingQuotaWarning : '');
   await notifyManager(emp, leaveMsg);
   await notifyProxy(insertData);
+  await notifyChairmanAssist(insertData);
   alert(_isOnBehalf ? '✅ 已代 ' + emp.name + ' 登錄假單，等待審核' : '✅ 假單已送出，等待審核');
   ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty','apply-override-reason'].forEach(id=>document.getElementById(id).value='');
   resetQuotaApply();
@@ -2541,7 +2558,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v178';
+  if (dbg) dbg.textContent = 'v179';
   renderCalendar();
 }
 
