@@ -2541,7 +2541,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v177';
+  if (dbg) dbg.textContent = 'v178';
   renderCalendar();
 }
 
@@ -2789,6 +2789,24 @@ async function downloadLeaves() {
   });
   try { await ensureXLSX(); } catch(e) { alert('Excel 元件載入失敗，請確認網路後再試'); return; }
 
+  // v178：第二個工作表「連結事件」— 只放這次下載的假單有連到的事件
+  var evIds = [];
+  filtered.forEach(function(r){ if (r.event_id && evIds.indexOf(r.event_id) < 0) evIds.push(r.event_id); });
+  var evMap = {}, evLeaves = {}, evEmp = {};
+  function evLabel(ev) { return ev.kind + (ev.kind === '孕產' ? '' : '假') + ' ' + rocDate(ev.event_date); }
+  if (evIds.length) {
+    var evRes = await sb.from('leave_events').select('*').in('id', evIds);
+    (evRes.data || []).forEach(function(ev){ evMap[ev.id] = ev; });
+    var lkRes = await sb.from('leave_requests').select('doc_no,event_id,leave_subtype,days,status,start_date')
+      .in('event_id', evIds).in('status', ['approved','pending']);
+    (lkRes.data || []).forEach(function(x){ (evLeaves[x.event_id] = evLeaves[x.event_id] || []).push(x); });
+    var evNos = Object.keys(evMap).map(function(k){ return evMap[k].emp_no; });
+    if (evNos.length) {
+      var eeRes = await sb.from('employees').select('emp_no,name,unit_name').in('emp_no', evNos);
+      (eeRes.data || []).forEach(function(e){ evEmp[e.emp_no] = e; });
+    }
+  }
+
   var ST = { approved:'已核准', pending:'待審核', rejected:'已退回' };
   var headers = [
     '請假編號','申請日期','申請人姓名','申請人員工編號','申請人單位','申請人職稱','申請人擔任事務',
@@ -2805,7 +2823,8 @@ async function downloadLeaves() {
     if (r.days >= 3 && reviewDate) gmReviewDate = (reviewDate === '2026-02-13') ? '2026-02-14' : reviewDate;
     var px = empProxyCache[normName(r.proxy_name)] || {};
     var ev = '';
-    if (r.event_info) { try { ev = evInfoText(r.leave_subtype, r.event_info); } catch(e) { ev = JSON.stringify(r.event_info); } }
+    if (r.event_id && evMap[r.event_id]) ev = evLabel(evMap[r.event_id]);
+    else if (r.event_info) { try { ev = evInfoText(r.leave_subtype, r.event_info); } catch(e) { ev = JSON.stringify(r.event_info); } }
     else if (r.event_id) ev = '已連結事件';
     var qw = r.quota_warning || '';
     if (r.quota_override_by) qw += (qw ? '；' : '') + '人事放行（' + r.quota_override_by + '）';
@@ -2840,6 +2859,35 @@ async function downloadLeaves() {
   ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:rows.length, c:headers.length-1} }) };
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '請假紀錄');
+
+  var evHeaders = ['事件','員工編號','姓名','單位','事件種類','事件日期','細節','期限','可請天數','已請天數','剩餘天數','狀態','備註','連結假單'];
+  var evRows = Object.keys(evMap).map(function(id){ return evMap[id]; })
+    .sort(function(a,b){ return String(a.event_date).localeCompare(String(b.event_date)); })
+    .map(function(ev){
+      var lk = (evLeaves[ev.id] || []).slice().sort(function(a,b){ return String(a.start_date).localeCompare(String(b.start_date)); });
+      var subs = Object.keys(ev.quotas || {});
+      function usedOf(sub){ return lk.filter(function(x){ return x.leave_subtype === sub; }).reduce(function(t,x){ return t + (Number(x.days)||0); }, 0); }
+      var cap, used, remain;
+      if (subs.length === 1) {
+        cap = Number(ev.quotas[subs[0]]); used = usedOf(subs[0]); remain = cap - used;
+      } else {
+        cap = subs.map(function(s){ return s + ' ' + ev.quotas[s]; }).join('／');
+        used = subs.map(function(s){ return s + ' ' + usedOf(s); }).join('／');
+        remain = subs.map(function(s){ return s + ' ' + (Number(ev.quotas[s]) - usedOf(s)); }).join('／');
+      }
+      var emp = evEmp[ev.emp_no] || {};
+      return [evLabel(ev), ev.emp_no || '', emp.name || '', emp.unit_name || '',
+        ev.kind || '', ev.event_date || '', ev.detail || '', ev.deadline || '',
+        cap, used, remain, ev.is_closed ? '已結案' : '使用中', ev.note || '',
+        lk.map(function(x){ return x.doc_no || '（審核中）'; }).join('、')];
+    });
+  var ws2 = XLSX.utils.aoa_to_sheet([evHeaders].concat(evRows.length ? evRows : [['（這次下載的假單沒有連結事件）']]));
+  for (var j = 0; j < evRows.length; j++) {
+    var a2 = XLSX.utils.encode_cell({ r: j + 1, c: 1 });
+    if (ws2[a2]) { ws2[a2].t = 's'; ws2[a2].v = String(ws2[a2].v); ws2[a2].z = '@'; }
+  }
+  ws2['!cols'] = [16,11,9,10,8,11,14,11,10,10,10,8,14,24].map(function(w){ return { wch: w }; });
+  XLSX.utils.book_append_sheet(wb, ws2, '連結事件');
   XLSX.writeFile(wb, '請假紀錄_' + tpeDate(new Date()) + '.xlsx');
 }
 
