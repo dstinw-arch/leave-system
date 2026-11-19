@@ -2038,7 +2038,12 @@ var empUnitCache = {};  // emp_no -> 現職單位名稱（含已停用員工）
 // 列印、匯出欄位、稽核軌跡全部保留原樣。
 // 找不到員工資料時退回使用假單快照，避免資料消失。
 function empCurrentUnit(r) {
-  return empUnitCache[r.emp_no] || r.unit_name || '';
+  return empUnitCache[r.emp_no] || unitGroup(r.unit_id, r.unit_name);
+}
+// v175：管理部底下的單位名稱改成各部門（稽核室、法遵室、業務部…），
+// 篩選/分組時 7、7-01～7-XX 一律歸「管理部」同一區塊。注意不能用 startsWith('7')，八里（70）會被誤判。
+function unitGroup(unitId, unitName) {
+  return /^7(-|$)/.test(String(unitId == null ? '' : unitId)) ? '管理部' : (unitName || '');
 }
 var allHrEmps = []; // 目前在職員工名單（用於人員篩選下拉選單，反映「現在」單位，而非假單快照上的單位）
 
@@ -2065,12 +2070,12 @@ async function loadHrAll() {
   _all.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
   allHrLeaves = _all;
   // 載入員工資料快取（補 F、G、Q、R、S 欄用）
-  var empRes = await sb.from('employees').select('emp_no,name,unit_name,title,duty,is_active');
+  var empRes = await sb.from('employees').select('emp_no,name,unit_id,unit_name,title,duty,is_active');
   allHrEmps = (empRes.data||[]).filter(function(e){ return e.is_active !== false; });
   (empRes.data||[]).forEach(function(e){
     empCache[e.emp_no] = {title: e.title||'', duty: e.duty||''};
     empProxyCache[normName(e.name)] = {emp_no: e.emp_no, unit_name: e.unit_name||'', title: e.title||''};
-    empUnitCache[e.emp_no] = e.unit_name || '';
+    empUnitCache[e.emp_no] = unitGroup(e.unit_id, e.unit_name);
   });
   var FIXED_UNITS = [["7","管理部"], ["16","營業部"], ["25","水碓分社"], ["34","竹圍分社"], ["43","英專分社"], ["52","義山分社"], ["61","三芝分社"], ["70","八里分社"], ["89","成州分社"], ["98","五股分社"], ["104","萬金分社"], ["113","新莊分社"], ["122","泰山分社"], ["131","林口分社"], ["140","板橋分社"], ["159","蘆洲分社"], ["168","三重分社"]];
   var unitSel = document.getElementById('hr-filter-unit');
@@ -2086,7 +2091,7 @@ function updateEmpFilter() {
   // 改用「目前在職員工的現在單位」產生人員清單，而非掃描歷史假單快照，
   // 避免調職後舊單位仍殘留該員工、新單位卻看不到人的問題
   allHrEmps.forEach(function(e) {
-    if ((!unit || e.unit_name === unit) && e.name && emps.indexOf(e.name) < 0) emps.push(e.name);
+    if ((!unit || unitGroup(e.unit_id, e.unit_name) === unit) && e.name && emps.indexOf(e.name) < 0) emps.push(e.name);
   });
   emps.sort(function(a,b){ return a.localeCompare(b, 'zh-TW'); });
   empSel.innerHTML = '<option value="">所有人員</option>' + emps.map(function(e){ return '<option value="' + e + '">' + e + '</option>'; }).join('');
@@ -2198,7 +2203,7 @@ async function loadAnnualOverview() {
   });
   // 填單位下拉
   var units = [];
-  _annualEmps.forEach(function(e){ if (e.unit_name && !units.includes(e.unit_name)) units.push(e.unit_name); });
+  _annualEmps.forEach(function(e){ var g = unitGroup(e.unit_id, e.unit_name); if (g && !units.includes(g)) units.push(g); });
   var sel = document.getElementById('annual-filter-unit');
   var prevUnit = sel.value;
   sel.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+u+'">'+u+'</option>'; }).join('');
@@ -2208,13 +2213,13 @@ async function loadAnnualOverview() {
 
 function renderAnnualOverview() {
   var filterUnit = document.getElementById('annual-filter-unit').value;
-  var emps = filterUnit ? _annualEmps.filter(function(e){ return e.unit_name === filterUnit; }) : _annualEmps;
+  var emps = filterUnit ? _annualEmps.filter(function(e){ return unitGroup(e.unit_id, e.unit_name) === filterUnit; }) : _annualEmps;
 
   // 按單位分組
   var groups = {};
   var groupOrder = [];
   emps.forEach(function(e) {
-    var key = e.unit_name || '其他';
+    var key = unitGroup(e.unit_id, e.unit_name) || '其他';
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(e);
   });
@@ -2536,7 +2541,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v174';
+  if (dbg) dbg.textContent = 'v175';
   renderCalendar();
 }
 
@@ -3323,6 +3328,11 @@ async function changeUnit(sel) {
     newSup = pickSupervisor(emp);
     if (!newSup) { alert('未選直屬長官，已取消調動。'); loadHrMgmt(); return; }
     if (newUnitId === '7') newUnitId = mgmtUnitForSupervisor(newSup, empNo);
+    // v175：管理部底下要填部門名稱（管理部、稽核室、法遵室、業務部、授信展業部…）
+    var _defDept = /^7(-|$)/.test(oldUnitId || '') ? (oldUnitName || '管理部') : '管理部';
+    var _dept = prompt('請輸入 '+emp.name+' 的單位名稱（部門）\n例：管理部、稽核室、法遵室、業務部、授信展業部', _defDept);
+    if (_dept === null || !_dept.trim()) { alert('未填單位名稱，已取消調動。'); loadHrMgmt(); return; }
+    newUnitName = _dept.trim();
   }
 
   // 只更新員工資料；歷史假單一律不動（金檢需與紙本一致）
@@ -3978,7 +3988,7 @@ async function loadQuotaOverview() {
     });
   }
   var us = document.getElementById('qov-unit'), prev = us.value, units = [];
-  _qovEmps.forEach(function(e){ if (e.unit_name && units.indexOf(e.unit_name) < 0) units.push(e.unit_name); });
+  _qovEmps.forEach(function(e){ var g = unitGroup(e.unit_id, e.unit_name); if (g && units.indexOf(g) < 0) units.push(g); });
   us.innerHTML = '<option value="">所有單位</option>' + units.map(function(u){ return '<option value="'+escQ(u)+'">'+escQ(u)+'</option>'; }).join('');
   us.value = prev;
   renderQuotaOverview();
@@ -3994,10 +4004,10 @@ function qovCell(e, c) {
 function renderQuotaOverview() {
   var unit = document.getElementById('qov-unit').value;
   var near = document.getElementById('qov-near').checked;
-  var emps = _qovEmps.filter(function(e){ return !unit || e.unit_name === unit; });
+  var emps = _qovEmps.filter(function(e){ return !unit || unitGroup(e.unit_id, e.unit_name) === unit; });
   if (near) emps = emps.filter(function(e){ return _qovCols.some(function(c){ return qovCell(e,c).ratio >= 0.8; }); });
   var groups = {}, order = [];
-  emps.forEach(function(e){ var k = e.unit_name || '其他'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(e); });
+  emps.forEach(function(e){ var k = unitGroup(e.unit_id, e.unit_name) || '其他'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(e); });
   var w = Math.floor(75 / Math.max(_qovCols.length,1));
   var html = '<div style="font-size:12px;color:var(--muted);margin:2px 0 8px;">格內為「已請／上限」，含審核中。<span style="color:#e67e22;font-weight:600;">橘色</span>＝達 8 成，<span style="color:#e74c3c;font-weight:700;">紅色</span>＝已達或超過上限。病假含生理假第 4 天起，超過只提醒。喪假依每位亡故親屬分開算，這裡只列今年已請天數；某筆喪假事件超過可請天數時標紅。</div>';
   order.forEach(function(u){
@@ -4821,15 +4831,15 @@ function certRenderStat(){
   document.getElementById('s-cntsub').textContent='在職 '+rows.length+' 人';
   document.getElementById('s-amt').textContent=totalAmt.toLocaleString();
   document.getElementById('s-amtsub').textContent='領取 '+rows.filter(function(x){return x.r.amt>0;}).length+' 人';
-  if(unit) rows=rows.filter(function(x){return x.e.unit_name===unit;});
+  if(unit) rows=rows.filter(function(x){return unitGroup(x.e.unit_id, x.e.unit_name)===unit;});
   if(kw) rows=rows.filter(function(x){return x.e.name.indexOf(kw)>=0||x.e.emp_no.indexOf(kw)>=0;});
   rows.sort(function(a,b){ return sort==='amt'? (b.r.amt-a.r.amt||b.r.cnt-a.r.cnt) : sort==='cnt'? (b.r.cnt-a.r.cnt||b.r.amt-a.r.amt) : sort==='emp'? a.e.emp_no.localeCompare(b.e.emp_no) : (certUnitOrder(a.e.unit_id)-certUnitOrder(b.e.unit_id)||a.e.emp_no.localeCompare(b.e.emp_no)); });
   var out;
   if(rows.length===0){ out='<div class="empty-hint">查無符合條件的同仁</div>'; }
   else if(sort==='unit'){
-    var groups={}; rows.forEach(function(x){ var k=x.e.unit_id; (groups[k]=groups[k]||[]).push(x); });
+    var groups={}; rows.forEach(function(x){ var k=/^7(-|$)/.test(String(x.e.unit_id||''))?'7':x.e.unit_id; (groups[k]=groups[k]||[]).push(x); });
     var keys=Object.keys(groups).sort(function(a,b){return certUnitOrder(a)-certUnitOrder(b);});
-    out=keys.map(function(k){ var g=groups[k], nm=g[0].e.unit_name; var sc=g.reduce(function(a,x){return a+x.r.cnt;},0), sa=g.reduce(function(a,x){return a+x.r.amt;},0);
+    out=keys.map(function(k){ var g=groups[k], nm=(k==='7'?'管理部':g[0].e.unit_name); var sc=g.reduce(function(a,x){return a+x.r.cnt;},0), sa=g.reduce(function(a,x){return a+x.r.amt;},0);
       return '<div class="ugroup"><div class="uhead"><span class="ucode">'+String(k).padStart(4,'0')+'</span><span class="uname">'+cEsc(nm)+'</span><span class="usum">'+g.length+' 人 · '+sc+' 張 · '+sa.toLocaleString()+' 元</span></div>'+g.map(certRowHtml).join('')+'</div>';
     }).join('');
   } else { out='<div class="ugroup">'+rows.map(certRowHtml).join('')+'</div>'; }
