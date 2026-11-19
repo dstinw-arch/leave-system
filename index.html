@@ -2541,7 +2541,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v176';
+  if (dbg) dbg.textContent = 'v177';
   renderCalendar();
 }
 
@@ -2765,6 +2765,13 @@ function tpeDate(ts) {
   if (isNaN(d)) return String(ts).slice(0,10);
   return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 }
+// v177：管理部（7、7-XX）假單的審核流程顯示成「部門＋直屬長官」，例：業務部直屬長官
+function reviewFlowText(r) {
+  var RT = { chairman:'理事主席', gm:'總經理', unit:'分社主管', mgmt:'直屬長官', hr:'人事' };
+  var t = r.reviewer_type;
+  if (/^7(-|$)/.test(String(r.unit_id || '')) && (t === 'unit' || t === 'mgmt')) return (r.unit_name || '管理部') + '直屬長官';
+  return RT[t] || t || '';
+}
 // v176：下載改成 .xlsx — 原 22 欄順序不變，後面加 7 欄；員編存文字，前面的 0 不會不見
 async function downloadLeaves() {
   const unit = document.getElementById('hr-filter-unit').value;
@@ -2782,7 +2789,6 @@ async function downloadLeaves() {
   });
   try { await ensureXLSX(); } catch(e) { alert('Excel 元件載入失敗，請確認網路後再試'); return; }
 
-  var RT = { chairman:'理事主席', gm:'總經理', unit:'分社主管', mgmt:'管理部直屬長官', hr:'人事' };
   var ST = { approved:'已核准', pending:'待審核', rejected:'已退回' };
   var headers = [
     '請假編號','申請日期','申請人姓名','申請人員工編號','申請人單位','申請人職稱','申請人擔任事務',
@@ -2817,7 +2823,7 @@ async function downloadLeaves() {
       r.proxy_title || px.title || '',
       r.proxy_duty||'',
       r.reviewed_by||'', gmReviewDate,
-      r.unit_id||'', ST[r.status] || r.status || '', RT[r.reviewer_type] || r.reviewer_type || '',
+      r.unit_id||'', ST[r.status] || r.status || '', reviewFlowText(r),
       reviewDate, r.paper_confirmed ? '✓' : '', ev, qw
     ];
   });
