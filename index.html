@@ -2541,7 +2541,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v175';
+  if (dbg) dbg.textContent = 'v176';
   renderCalendar();
 }
 
@@ -2749,7 +2749,24 @@ async function doSettingChangePw() {
 
 
 // ── 下載 Excel（CSV格式）──
-function downloadLeaves() {
+async function ensureXLSX() {
+  if (typeof XLSX !== 'undefined') return;
+  await new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+// 時間戳轉台北日期 YYYY-MM-DD（避免早上 8 點前送出的假單變成前一天）
+function tpeDate(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  if (isNaN(d)) return String(ts).slice(0,10);
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+}
+// v176：下載改成 .xlsx — 原 22 欄順序不變，後面加 7 欄；員編存文字，前面的 0 不會不見
+async function downloadLeaves() {
   const unit = document.getElementById('hr-filter-unit').value;
   const status = document.getElementById('hr-filter-status').value;
   let filtered = allHrLeaves.slice();
@@ -2757,66 +2774,67 @@ function downloadLeaves() {
   if (status) filtered = filtered.filter(function(r){ return r.status===status; });
   filtered = filtered.filter(function(r){ return r.status !== 'rejected'; });
   if (!filtered.length) { alert('沒有資料可下載'); return; }
-  // 按 doc_no 排序（有的排前面），沒有 doc_no 的按 created_at 排後面
   filtered.sort(function(a,b){
     var an = a.doc_no ? docNoKey(a.doc_no) : Infinity;
     var bn = b.doc_no ? docNoKey(b.doc_no) : Infinity;
     if (an === Infinity && bn === Infinity) return new Date(a.created_at) - new Date(b.created_at);
     return an - bn;
   });
+  try { await ensureXLSX(); } catch(e) { alert('Excel 元件載入失敗，請確認網路後再試'); return; }
 
-  // 欄位對應「給clude請假紀錄.xlsx」格式（22欄）
+  var RT = { chairman:'理事主席', gm:'總經理', unit:'分社主管', mgmt:'管理部直屬長官', hr:'人事' };
+  var ST = { approved:'已核准', pending:'待審核', rejected:'已退回' };
   var headers = [
     '請假編號','申請日期','申請人姓名','申請人員工編號','申請人單位','申請人職稱','申請人擔任事務',
     '假別','假別細項','事由',
     '請假起日','請假迄日','天數','起始時間','結束時間',
     '代理人姓名','代理人員工編號','代理人單位','代理人職稱','代理人擔任事務',
-    '審核人','三日以上總經理審核日期'
+    '審核人','三日以上總經理審核日期',
+    '單位代碼','狀態','審核流程','核准日期','紙本確認','事件紀錄','額度提醒'
   ];
-  var rows = filtered.map(function(r, i) {
-    var statusText = r.status==='approved'?'已核准':r.status==='rejected'?'已拒絕':'待審核';
-    // 三日以上總經理審核日期：reviewer_type=gm 且天數>=3 且已審核
-    // W欄：3天以上已核准假單的審核日期，2026-02-13 改 2026-02-14
+  var TEXT_COLS = [3, 16, 22]; // 申請人員編、代理人員編、單位代碼
+  var rows = filtered.map(function(r) {
+    var reviewDate = (r.status === 'approved' && r.reviewed_at) ? tpeDate(r.reviewed_at) : '';
     var gmReviewDate = '';
-    if (r.days >= 3 && r.status === 'approved' && r.reviewed_at) {
-      var reviewDate = r.reviewed_at.split('T')[0];
-      if (reviewDate === '2026-02-13') reviewDate = '2026-02-14';
-      gmReviewDate = reviewDate;
-    }
+    if (r.days >= 3 && reviewDate) gmReviewDate = (reviewDate === '2026-02-13') ? '2026-02-14' : reviewDate;
+    var px = empProxyCache[normName(r.proxy_name)] || {};
+    var ev = '';
+    if (r.event_info) { try { ev = evInfoText(r.leave_subtype, r.event_info); } catch(e) { ev = JSON.stringify(r.event_info); } }
+    else if (r.event_id) ev = '已連結事件';
+    var qw = r.quota_warning || '';
+    if (r.quota_override_by) qw += (qw ? '；' : '') + '人事放行（' + r.quota_override_by + '）';
     return [
-      r.doc_no || '',
-      r.created_at ? r.created_at.split('T')[0] : '',
+      r.doc_no || '', tpeDate(r.created_at),
       r.emp_name||'', r.emp_no||'', r.unit_name||'',
-      r.title || (empCache[r.emp_no]||{}).title || '',
+      r.title || r.emp_title || (empCache[r.emp_no]||{}).title || '',
       r.duty || (empCache[r.emp_no]||{}).duty || '',
       r.leave_type||'', r.leave_subtype||'', r.reason||'',
-      r.start_date||'', r.end_date||'', r.days||'',
-      r.start_time||'', r.end_time||'',
+      r.start_date||'', r.end_date||'', (r.days === null || r.days === undefined || r.days === '') ? '' : Number(r.days),
+      String(r.start_time||'').slice(0,5), String(r.end_time||'').slice(0,5),
       r.proxy_name||'',
-      r.proxy_emp_no || (empProxyCache[normName(r.proxy_name)]||{}).emp_no || '',
-      r.proxy_unit || (empProxyCache[normName(r.proxy_name)]||{}).unit_name || '',
-      r.proxy_title || (empProxyCache[normName(r.proxy_name)]||{}).title || '',
+      r.proxy_emp_no || px.emp_no || '',
+      r.proxy_unit || px.unit_name || '',
+      r.proxy_title || px.title || '',
       r.proxy_duty||'',
-      r.reviewed_by||'', gmReviewDate
+      r.reviewed_by||'', gmReviewDate,
+      r.unit_id||'', ST[r.status] || r.status || '', RT[r.reviewer_type] || r.reviewer_type || '',
+      reviewDate, r.paper_confirmed ? '✓' : '', ev, qw
     ];
   });
 
-  var BOM = '\uFEFF';
-  var csvContent = BOM + [headers].concat(rows).map(function(row) {
-    return row.map(function(cell) {
-      var s = String(cell == null ? '' : cell);
-      return (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0)
-        ? '"' + s.replace(/"/g, '""') + '"' : s;
-    }).join(',');
-  }).join('\n');
-
-  var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = '請假紀錄_' + new Date().toISOString().split('T')[0] + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+  // 員編、單位代碼強制存成文字（Excel 才不會吃掉前面的 0）
+  for (var i = 0; i < rows.length; i++) {
+    TEXT_COLS.forEach(function(c){
+      var addr = XLSX.utils.encode_cell({ r: i + 1, c: c });
+      if (ws[addr]) { ws[addr].t = 's'; ws[addr].v = String(ws[addr].v); ws[addr].z = '@'; }
+    });
+  }
+  ws['!cols'] = [10,11,9,11,10,9,12,7,11,16,11,11,6,8,8,9,11,10,9,12,8,13,8,7,13,11,8,14,16].map(function(w){ return { wch: w }; });
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:rows.length, c:headers.length-1} }) };
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '請假紀錄');
+  XLSX.writeFile(wb, '請假紀錄_' + tpeDate(new Date()) + '.xlsx');
 }
 
 // ── 匯入 Excel（支援 .xlsx 和 .csv）──
@@ -2829,15 +2847,7 @@ async function importLeaves(input) {
   msgEl.textContent = '解析中...';
 
   try {
-    // 動態載入 SheetJS
-    if (typeof XLSX === 'undefined') {
-      await new Promise(function(resolve, reject) {
-        var s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
+    await ensureXLSX();
 
     var arrayBuffer = await new Promise(function(resolve, reject) {
       var reader = new FileReader();
