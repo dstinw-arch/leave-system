@@ -462,6 +462,10 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
           <textarea id="apply-reason" placeholder="請輸入請假事由"></textarea>
         </div>
         <div class="form-row">
+          <label>本人擔任事務</label>
+          <input type="text" id="apply-duty" placeholder="本人擔任事務（例：放款、會計）" />
+        </div>
+        <div class="form-row">
           <label>職務代理人 — 擔任事務</label>
           <input type="text" id="apply-proxy-duty" placeholder="代理人擔任事務（例：會計、出納）" />
         </div>
@@ -1709,6 +1713,8 @@ async function confirmLeave() {
   const reason = document.getElementById('apply-reason').value.trim();
   const proxyName = normName(document.getElementById('apply-proxy-name').value);
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
+  const myDuty = document.getElementById('apply-duty').value.trim();
+  if (!myDuty) { errEl.textContent='請填寫本人擔任事務'; errEl.style.display='block'; return; }
   if ((days * 2) % 1 !== 0 && subtype !== '家庭照顧假') {
     errEl.textContent='只有家庭照顧假可以按小時請，其他假別請以半天為單位'; errEl.style.display='block'; return;
   }
@@ -1829,6 +1835,7 @@ async function confirmLeave() {
     '<b>時間：</b>' + timeLabel + '<br>' +
     '<b>天數：</b>' + days + ' 天<br>' +
     '<b>事由：</b>' + reason + '<br>' +
+    '<b>本人擔任事務：</b>' + escQ(myDuty) + '<br>' +
     '<b>代理人：</b>' + proxyName + '（' + proxyDuty + '）' +
     (_evInfo ? '<br><b>事件資料：</b>' + escQ(evInfoText(subtype, _evInfo)) : '') + menstrualNote + quotaNote;
   document.getElementById('confirm-modal').style.display = 'flex';
@@ -1849,7 +1856,9 @@ async function doSubmitLeave() {
   const reason = document.getElementById('apply-reason').value.trim();
   const proxyName = normName(document.getElementById('apply-proxy-name').value);
   const proxyDuty = document.getElementById('apply-proxy-duty').value.trim();
+  const myDuty = document.getElementById('apply-duty').value.trim();
   const errEl = document.getElementById('apply-error');
+  if (!myDuty) { errEl.textContent='請填寫本人擔任事務'; errEl.style.display='block'; return; }
   // 二次防線：擋假日（避免繞過 confirmLeave）
   if (holidayLabel(startDate) || holidayLabel(endDate)) {
     errEl.textContent='起訖日不可為假日，請改選工作日'; errEl.style.display='block'; return;
@@ -1886,6 +1895,7 @@ async function doSubmitLeave() {
   const insertData = {
     emp_no:emp.emp_no, emp_name:emp.name, unit_id:emp.unit_id, unit_name:emp.unit_name,
     emp_title:emp.title || null,
+    duty: myDuty,
     leave_type:type, leave_subtype:subtype, start_date:startDate, end_date:endDate,
     start_time:startTime, end_time:endTime, days, reason,
     proxy_name:proxyName, proxy_duty:proxyDuty,
@@ -1927,6 +1937,7 @@ async function doSubmitLeave() {
   alert(_isOnBehalf ? '✅ 已代 ' + emp.name + ' 登錄假單，等待審核' : '✅ 假單已送出，等待審核');
   ['apply-reason','apply-days','apply-proxy-name','apply-proxy-duty','apply-override-reason'].forEach(id=>document.getElementById(id).value='');
   resetQuotaApply();
+  fillApplyDuty(currentUser);
   proxyData = {};
   var pi = document.getElementById('proxy-info'); if(pi) { pi.textContent=''; pi.style.display='none'; }
   showPage('emp-home', document.getElementById('bnav-emp-home'));
@@ -2525,7 +2536,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v173';
+  if (dbg) dbg.textContent = 'v174';
   renderCalendar();
 }
 
@@ -3768,7 +3779,13 @@ function currentEventId(subtype, startDate) {
   if (!row || row.style.display === 'none' || !sel || !sel.value) return null;
   return sel.value;
 }
+// v174：本人擔任事務預帶人員資料，可修改；代為登錄換人時改帶該同仁的
+function fillApplyDuty(emp) {
+  var el = document.getElementById('apply-duty');
+  if (el) el.value = (emp && emp.duty) ? emp.duty : '';
+}
 async function initQuotaApply() {
+  fillApplyDuty(currentUser);
   await loadLeaveRules(true);
   var row = document.getElementById('apply-onbehalf-row');
   var orow = document.getElementById('apply-override-row');
@@ -3792,7 +3809,7 @@ async function onBehalfChanged() {
   document.getElementById('apply-proxy-name').value = '';
   proxyData = {};
   var pi = document.getElementById('proxy-info'); if (pi) { pi.textContent=''; pi.style.display='none'; }
-  if (applyEmpNo() !== currentUser.emp_no) await getApplyEmp();
+  fillApplyDuty(await getApplyEmp());
   updateSubtype();
 }
 function resetQuotaApply() {
