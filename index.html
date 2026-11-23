@@ -831,6 +831,8 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
       <div class="filter-bar">
         <select id="s-unit" onchange="certRenderStat()"><option value="">全部單位</option></select>
         <input id="s-kw" placeholder="搜尋姓名/員編" oninput="certRenderStat()">
+        <select id="s-cert" onchange="certRenderStat()"><option value="">全部證照</option></select>
+        <select id="s-has" onchange="certRenderStat()" style="display:none"><option value="1">已取得</option><option value="0">未取得</option></select>
         <select id="s-sort" onchange="certRenderStat()">
           <option value="unit">依單位排序</option><option value="amt">依津貼排序</option>
           <option value="cnt">依張數排序</option><option value="emp">依員編排序</option>
@@ -2563,7 +2565,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v180';
+  if (dbg) dbg.textContent = 'v181';
   renderCalendar();
 }
 
@@ -4903,6 +4905,10 @@ function certInitStat(){
   var s=document.getElementById('s-unit'); if(!s)return;
   var units=[["7","管理部"],["16","營業部"],["25","水碓分社"],["34","竹圍分社"],["43","英專分社"],["52","義山分社"],["61","三芝分社"],["70","八里分社"],["89","成州分社"],["98","五股分社"],["104","萬金分社"],["113","新莊分社"],["122","泰山分社"],["131","林口分社"],["140","板橋分社"],["159","蘆洲分社"],["168","三重分社"]];
   s.innerHTML='<option value="">全部單位</option>'+units.map(function(u){return '<option value="'+u[1]+'">'+u[0].padStart(4,'0')+'　'+cEsc(u[1])+'</option>';}).join('');
+  // v181：依證照查詢
+  var sc=document.getElementById('s-cert');
+  if(sc){ var cats={}; var order=[]; CERT_MASTER.filter(function(c){return c.active;}).forEach(function(c){ var k=c.category||'其他'; if(!cats[k]){cats[k]=[];order.push(k);} cats[k].push(c); });
+    sc.innerHTML='<option value="">全部證照</option>'+order.map(function(k){ return '<optgroup label="'+cEsc(k)+'">'+cats[k].map(function(c){return '<option value="'+c.id+'">'+cEsc(c.name)+'</option>';}).join('')+'</optgroup>'; }).join(''); }
 }
 function certUnitOrder(id){
   id=String(id);
@@ -4912,6 +4918,8 @@ function certUnitOrder(id){
 }
 function certRenderStat(){
   var unit=document.getElementById('s-unit').value, kw=document.getElementById('s-kw').value.trim(), sort=document.getElementById('s-sort').value;
+  var certId=(document.getElementById('s-cert')||{}).value||'', hasSel=document.getElementById('s-has'), wantHas=!hasSel||hasSel.value!=='0';
+  if(hasSel) hasSel.style.display=certId?'':'none';
   var rows=CERT_EMPS.filter(function(e){return e.active;}).map(function(e){return {e:e, r:certCalc(e.emp_no)};});
   var totalCnt=rows.reduce(function(a,x){return a+x.r.cnt;},0), totalAmt=rows.reduce(function(a,x){return a+x.r.amt;},0);
   document.getElementById('s-cnt').textContent=totalCnt;
@@ -4920,20 +4928,29 @@ function certRenderStat(){
   document.getElementById('s-amtsub').textContent='領取 '+rows.filter(function(x){return x.r.amt>0;}).length+' 人';
   if(unit) rows=rows.filter(function(x){return unitGroup(x.e.unit_id, x.e.unit_name)===unit;});
   if(kw) rows=rows.filter(function(x){return x.e.name.indexOf(kw)>=0||x.e.emp_no.indexOf(kw)>=0;});
+  // v181：依證照篩選（已取得＝已核可；未取得另標示審核中）
+  if(certId){
+    rows.forEach(function(x){ x.cy=null; x.cpend=false; CERT_RECORDS.forEach(function(r){ if(r.emp_no!==x.e.emp_no||String(r.certificate_id)!==String(certId))return; if(r.status==='approved'){ if(x.cy==null||r.year>x.cy) x.cy=r.year; } else if(r.status==='pending') x.cpend=true; }); });
+    rows=rows.filter(function(x){ return wantHas ? x.cy!=null : x.cy==null; });
+  }
   rows.sort(function(a,b){ return sort==='amt'? (b.r.amt-a.r.amt||b.r.cnt-a.r.cnt) : sort==='cnt'? (b.r.cnt-a.r.cnt||b.r.amt-a.r.amt) : sort==='emp'? a.e.emp_no.localeCompare(b.e.emp_no) : (certUnitOrder(a.e.unit_id)-certUnitOrder(b.e.unit_id)||a.e.emp_no.localeCompare(b.e.emp_no)); });
   var out;
-  if(rows.length===0){ out='<div class="empty-hint">查無符合條件的同仁</div>'; }
+  var certHint='';
+  if(certId){ var cn=(CERT_BY_ID[certId]||{name:''}).name; certHint='<div class="note" style="margin:.2rem 0 .6rem"><b>'+cEsc(cn)+'</b>　'+(wantHas?'已取得':'未取得')+' <b>'+rows.length+'</b> 人'+(wantHas?'':'（標「審核中」者已送出申請）')+'</div>'; }
+  if(rows.length===0){ out=certHint+'<div class="empty-hint">查無符合條件的同仁</div>'; }
   else if(sort==='unit'){
     var groups={}; rows.forEach(function(x){ var k=/^7(-|$)/.test(String(x.e.unit_id||''))?'7':x.e.unit_id; (groups[k]=groups[k]||[]).push(x); });
     var keys=Object.keys(groups).sort(function(a,b){return certUnitOrder(a)-certUnitOrder(b);});
     out=keys.map(function(k){ var g=groups[k], nm=(k==='7'?'管理部':g[0].e.unit_name); var sc=g.reduce(function(a,x){return a+x.r.cnt;},0), sa=g.reduce(function(a,x){return a+x.r.amt;},0);
-      return '<div class="ugroup"><div class="uhead"><span class="ucode">'+String(k).padStart(4,'0')+'</span><span class="uname">'+cEsc(nm)+'</span><span class="usum">'+g.length+' 人 · '+sc+' 張 · '+sa.toLocaleString()+' 元</span></div>'+g.map(certRowHtml).join('')+'</div>';
+      return '<div class="ugroup"><div class="uhead"><span class="ucode">'+String(k).padStart(4,'0')+'</span><span class="uname">'+cEsc(nm)+'</span><span class="usum">'+(certId?g.length+' 人':g.length+' 人 · '+sc+' 張 · '+sa.toLocaleString()+' 元')+'</span></div>'+g.map(certRowHtml).join('')+'</div>';
     }).join('');
-  } else { out='<div class="ugroup">'+rows.map(certRowHtml).join('')+'</div>'; }
+    out=certHint+out;
+  } else { out=certHint+'<div class="ugroup">'+rows.map(certRowHtml).join('')+'</div>'; }
   document.getElementById('s-list').innerHTML=out;
 }
 function certRowHtml(x){ var e=x.e, r=x.r, leave=CERT_ONLEAVE.has(e.emp_no);
-  var meta = cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+(leave?' · '+cEsc(certLeaveTag(e.emp_no)):'');
+  var meta = cEsc(e.title)+(e.grade?' · 職等 '+e.grade:'')+(leave?' · '+cEsc(certLeaveTag(e.emp_no)):'')
+    +(x.cy!=null?' · 民國 '+x.cy+' 年取得':'')+(x.cpend&&x.cy==null?' · <b style="color:var(--warning,#d97706)">審核中</b>':''); // v181
   return '<div class="prow'+(leave?' onleave':'')+'"><div class="pname">'+cEsc(maskName(e.name))+'<span class="pmeta">'+meta+'</span></div><div class="pcnt">'+r.cnt+'<span>張</span></div><div class="pamt '+(r.amt>=2000?'max':'')+'">'+(leave?'留停':r.amt.toLocaleString())+'</div></div>';
 }
 function certExportStat(){
