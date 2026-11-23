@@ -1352,6 +1352,9 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
   if (isHr) namePrefix = '[' + r.unit_name + '] ' + maskName(r.emp_name) + ' · ';
   else if (isGm || isMgr) namePrefix = maskName(r.emp_name) + ' · ';
   var canReview = (isMgr || isGm || isHr) && r.status === 'pending' && (!currentUser || r.emp_no !== currentUser.emp_no);
+  // v180：主管看到已轉呈總經理的假單 → 只能看、不能審
+  var fwdToGm = isMgr && r.reviewer_type === 'gm' && r.status === 'pending';
+  if (fwdToGm) canReview = false;
   var src = (isGm && currentUser && currentUser.emp_no === CHAIRMAN_EMP_NO) ? 'chairman' : isGm ? 'gm' : (isHr ? 'hr' : 'unit');
   var reviewBtn = canReview ? "<button class=\"btn-sm btn-approve\" onclick=\"openReview('" + r.id + "','" + src + "')\" >審核</button>" : '';
   var deleteBtn = (isHr && adminMode) ? "<button class=\"btn-sm\" style=\"background:#f8d7da;color:#842029;margin-left:.4rem;\" onclick=\"deleteLeave('" + r.id + "')\">🗑 刪除</button>" : '';
@@ -1398,7 +1401,7 @@ function leaveItemHtml(r, isMgr, isGm, isHr) {
     hrTopBar +
     '<div class="leave-header">' +
       '<div class="leave-name">' + namePrefix + r.leave_type + ' — ' + r.leave_subtype + '</div>' +
-      '<span class="leave-badge ' + (badgeMap[r.status]||'') + '">' + (statusMap[r.status]||r.status) + '</span>' +
+      '<span class="leave-badge ' + (badgeMap[r.status]||'') + '">' + (fwdToGm ? '總經理審核中' : (statusMap[r.status]||r.status)) + '</span>' +
     '</div>' +
     '<div class="leave-meta">' +
       r.start_date + ' ～ ' + r.end_date + '（' + daysText(r) + '）<br>' +
@@ -1967,21 +1970,23 @@ async function loadMgrReview() {
   var isMgmtMgr = currentUser.unit_id && /^7(-|$)/.test(currentUser.unit_id) && !DIRECT_TO_CHAIRMAN.includes(currentUser.emp_no);
   var query;
   if (isMgmtMgr) {
+    // v180：連同自己核准後轉呈總經理（3 天以上）的假單一起列出，主管才看得到後續狀況
     query = sb.from('leave_requests').select('*')
       .eq('reviewer_emp_no', currentUser.emp_no)
-      .eq('reviewer_type', 'mgmt')
+      .or('reviewer_type.eq.mgmt,and(reviewer_type.eq.gm,mgr_approved_by.not.is.null)')
       .order('created_at',{ascending:false});
   } else {
     query = sb.from('leave_requests').select('*')
       .eq('unit_id', currentUser.unit_id)
-      .eq('reviewer_type', 'unit')
+      .or('reviewer_type.eq.unit,and(reviewer_type.eq.gm,mgr_approved_by.not.is.null)')
       .neq('emp_no', currentUser.emp_no)
       .order('created_at',{ascending:false});
   }
   const { data } = await query;
   allUnitLeaves = data || [];
-  const pending = allUnitLeaves.filter(r=>r.status==='pending');
-  const done = allUnitLeaves.filter(r=>r.status!=='pending');
+  // v180：轉呈總經理中的假單不算主管待審，放到「已審」區，標示「總經理審核中」
+  const pending = allUnitLeaves.filter(r=>r.status==='pending' && r.reviewer_type!=='gm');
+  const done = allUnitLeaves.filter(r=>!(r.status==='pending' && r.reviewer_type!=='gm'));
   document.getElementById('mgr-pending-list').innerHTML = pending.length
     ? pending.map(r=>leaveItemHtml(r,true,false,false)).join('')
     : '<div class="empty-hint">目前沒有待審假單 🎉</div>';
@@ -2558,7 +2563,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v179';
+  if (dbg) dbg.textContent = 'v180';
   renderCalendar();
 }
 
@@ -2674,6 +2679,7 @@ function showCalDay(ds) {
           showReason = r.reviewer_emp_no === currentUser.emp_no;
         } else if (currentUser.is_manager || currentUser.is_sub_manager) {
           showReason = (r.reviewer_type === 'unit' && r.unit_id === currentUser.unit_id) ||
+                       (r.reviewer_type === 'gm' && r.mgr_approved_by && r.unit_id === currentUser.unit_id) || // v180
                        r.reviewer_emp_no === currentUser.emp_no;
         }
       }
