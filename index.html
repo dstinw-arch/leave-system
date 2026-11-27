@@ -676,7 +676,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
     </div>
 
     <!-- 人事：人員管理 -->
-    <div id="hr-mgmt" class="page" style="display:none;flex-direction:column;height:calc(100vh - 56px);overflow:hidden;">
+    <div id="hr-mgmt" class="page" style="display:none;flex-direction:column;"><!-- v182：整頁一起捲動，不再擠成小框 -->
       <div style="flex-shrink:0;padding:1rem 0 0;">
         <div class="page-title" style="margin-bottom:.75rem;">人員管理</div>
 
@@ -726,7 +726,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
         </div>
         <div id="mgmt-count" style="font-size:11px;color:var(--muted);margin-bottom:.4rem;"></div>
       </div>
-      <div id="hr-mgmt-list" style="flex:1;overflow-y:auto;padding-bottom:5rem;"></div>
+      <div id="hr-mgmt-list" style="padding-bottom:5rem;"></div>
     </div>
 
     <!-- 設定 -->
@@ -1067,7 +1067,7 @@ function showPage(id, btn) {
   el.style.display = (id === 'hr-all' || id === 'hr-mgmt') ? 'flex' : 'block';
   document.querySelectorAll('.bnav').forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  if (id !== 'hr-all' && id !== 'hr-mgmt') window.scrollTo({top:0,behavior:'smooth'});
+  if (id !== 'hr-all') window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // ── 判斷假單應送誰審核 ──
@@ -2565,7 +2565,7 @@ async function loadCalendar() {
     .or('proxy_emp_no.eq.' + currentUser.emp_no + ',proxy_name.eq.' + normName(currentUser.name)).eq('status','approved');
   proxyLeaves = proxyRes.data || [];
   var dbg = document.getElementById('cal-debug');
-  if (dbg) dbg.textContent = 'v181';
+  if (dbg) dbg.textContent = 'v182';
   renderCalendar();
 }
 
